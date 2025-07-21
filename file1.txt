@@ -5,3 +5,4 @@ Graffana
 Jenkins pipeline
 JAR
 Nginx
+Docker
