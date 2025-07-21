@@ -6,3 +6,4 @@ Jenkins pipeline
 JAR
 Nginx
 Docker
+deployment
