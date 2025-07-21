@@ -1,0 +1,8 @@
+AWS services
+Terraform
+Kubernetes
+Graffana
+Jenkins pipeline
+Nginx
+Docker
+deployment
