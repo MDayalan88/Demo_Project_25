@@ -2,4 +2,6 @@ AWS services
 Terraform
 Kubernetes
 Graffana
-
+Jenkins pipeline
+JAR
+Nginx
