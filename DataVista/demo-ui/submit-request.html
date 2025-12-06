@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit Request - DataVista</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+        .form-group label {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.3s ease;
+        }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .sql-editor {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 300px;
+            line-height: 1.6;
+            border: 2px solid #333;
+        }
+        .sql-editor:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .editor-toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .editor-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: #f5f5f5;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .editor-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        .editor-btn .material-icons {
+            font-size: 18px;
+        }
+        .ai-suggestions {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 25px;
+        }
+        .ai-suggestions h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .suggestion-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .suggestion-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            align-items: start;
+            gap: 12px;
+        }
+        .suggestion-item .material-icons {
+            color: #ffd700;
+        }
+        .form-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+            margin-top: 30px;
+        }
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #666;
+        }
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #1976d2;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+        }
+        .info-box p {
+            color: #1976d2;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="material-icons">insights</span>
+                <span class="brand-text">DataVista</span>
+            </div>
+            <div class="nav-menu">
+                <a href="index.html" class="nav-link">
+                    <span class="material-icons">dashboard</span>
+                    Dashboard
+                </a>
+                <a href="submit-request.html" class="nav-link active">
+                    <span class="material-icons">add_circle</span>
+                    Submit Request
+                </a>
+                <a href="status-tracking.html" class="nav-link">
+                    <span class="material-icons">track_changes</span>
+                    Track Status
+                </a>
+                <a href="results.html" class="nav-link">
+                    <span class="material-icons">download</span>
+                    Results
+                </a>
+                <a href="admin.html" class="nav-link">
+                    <span class="material-icons">admin_panel_settings</span>
+                    Admin
+                </a>
+            </div>
+            <div class="nav-user">
+                <span class="material-icons">account_circle</span>
+                <span>John Doe</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-container">
+        <div class="page-header">
+            <h1>Submit Query Request</h1>
+            <p class="subtitle">Let AI agents handle your SQL query execution automatically</p>
+        </div>
+
+        <div class="section-card">
+            <div class="info-box">
+                <p><strong>🤖 AI-Powered Processing:</strong> Your query will be automatically validated for security, routed to the correct environment, executed, and validated by our AI agents. You'll receive real-time notifications at each step.</p>
+            </div>
+
+            <form id="requestForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="requestTitle">Request Title *</label>
+                        <input type="text" id="requestTitle" placeholder="e.g., Q4 Sales Report" required value="User Activity Report">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="environment">Target Environment *</label>
+                        <select id="environment" required>
+                            <option value="">Select Environment</option>
+                            <option value="dev">Development</option>
+                            <option value="staging">Staging</option>
+                            <option value="prod" selected>Production</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="priority">Priority</label>
+                        <select id="priority">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="outputFormat">Output Format</label>
+                        <select id="outputFormat">
+                            <option value="csv" selected>CSV</option>
+                            <option value="excel">Excel (XLSX)</option>
+                            <option value="json">JSON</option>
+                            <option value="all">All Formats</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="description">Description</label>
+                        <textarea id="description" rows="3" placeholder="Brief description of what this query does and why you need it">Generate a comprehensive report of user login activities for Q4 2025, including timestamps, IP addresses, and session durations.</textarea>
+                    </div>
+                </div>
+
+                <div class="form-group full-width">
+                    <label for="sqlQuery">SQL Query *</label>
+                    <div class="editor-toolbar">
+                        <button type="button" class="editor-btn">
+                            <span class="material-icons">format_align_left</span>
+                            Format
+                        </button>
+                        <button type="button" class="editor-btn">
+                            <span class="material-icons">verified</span>
+                            Validate
+                        </button>
+                        <button type="button" class="editor-btn">
+                            <span class="material-icons">history</span>
+                            History
+                        </button>
+                        <button type="button" class="editor-btn">
+                            <span class="material-icons">save</span>
+                            Save Template
+                        </button>
+                    </div>
+                    <textarea id="sqlQuery" class="sql-editor" required>SELECT 
+    u.user_id,
+    u.username,
+    u.email,
+    l.login_timestamp,
+    l.ip_address,
+    l.session_duration_minutes,
+    l.device_type
+FROM 
+    users u
+INNER JOIN 
+    login_logs l ON u.user_id = l.user_id
+WHERE 
+    l.login_timestamp >= '2025-10-01'
+    AND l.login_timestamp < '2026-01-01'
+    AND u.status = 'active'
+ORDER BY 
+    l.login_timestamp DESC;</textarea>
+                </div>
+
+                <div class="ai-suggestions">
+                    <h3>
+                        <span class="material-icons">smart_toy</span>
+                        AI Query Analysis
+                    </h3>
+                    <div class="suggestion-list">
+                        <div class="suggestion-item">
+                            <span class="material-icons">check_circle</span>
+                            <div>
+                                <strong>Security Check:</strong> Query is safe. No destructive operations detected.
+                            </div>
+                        </div>
+                        <div class="suggestion-item">
+                            <span class="material-icons">speed</span>
+                            <div>
+                                <strong>Performance Estimate:</strong> Expected execution time: 3-5 seconds (approximately 15,000 rows)
+                            </div>
+                        </div>
+                        <div class="suggestion-item">
+                            <span class="material-icons">lightbulb</span>
+                            <div>
+                                <strong>Optimization Tip:</strong> Consider adding an index on login_logs.login_timestamp for faster retrieval
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group full-width">
+                    <label>
+                        <input type="checkbox" checked>
+                        Receive email notification when query completes
+                    </label>
+                    <label>
+                        <input type="checkbox" checked>
+                        Receive Teams notification
+                    </label>
+                    <label>
+                        <input type="checkbox">
+                        Auto-deploy results to FTP server
+                    </label>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary">
+                        <span class="material-icons">cancel</span>
+                        Cancel
+                    </button>
+                    <button type="button" class="btn btn-secondary">
+                        <span class="material-icons">save</span>
+                        Save Draft
+                    </button>
+                    <a href="status-tracking.html" class="btn btn-primary">
+                        <span class="material-icons">send</span>
+                        Submit Request
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 DataVista. Powered by Azure OpenAI & Semantic Kernel</p>
+    </footer>
+</body>
+</html>

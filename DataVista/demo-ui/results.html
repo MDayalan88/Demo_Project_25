@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results - DataVista</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        .result-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        .result-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+        }
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 20px;
+        }
+        .result-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .result-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            font-size: 13px;
+            color: #666;
+        }
+        .result-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .result-meta-item .material-icons {
+            font-size: 16px;
+            color: #667eea;
+        }
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .result-stat {
+            text-align: center;
+        }
+        .result-stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        .result-stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .download-options {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .download-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            background: #f5f5f5;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        .download-btn:hover {
+            background: #667eea;
+            border-color: #667eea;
+            color: white;
+        }
+        .download-btn .material-icons {
+            font-size: 20px;
+        }
+        .data-preview {
+            margin-top: 25px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .preview-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .preview-table {
+            width: 100%;
+            font-size: 13px;
+        }
+        .preview-table th {
+            background: #1e1e1e;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .preview-table td {
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .preview-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+        .validation-report {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+        .validation-report h4 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        .validation-checks {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+        .validation-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+        }
+        .filter-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .filter-bar select,
+        .filter-bar input {
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: 'Inter', sans-serif;
+        }
+        .filter-bar input {
+            flex: 1;
+            min-width: 250px;
+        }
+        @media (max-width: 768px) {
+            .result-header {
+                flex-direction: column;
+                gap: 15px;
+            }
+            .result-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .download-options {
+                flex-direction: column;
+            }
+            .download-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="material-icons">insights</span>
+                <span class="brand-text">DataVista</span>
+            </div>
+            <div class="nav-menu">
+                <a href="index.html" class="nav-link">
+                    <span class="material-icons">dashboard</span>
+                    Dashboard
+                </a>
+                <a href="submit-request.html" class="nav-link">
+                    <span class="material-icons">add_circle</span>
+                    Submit Request
+                </a>
+                <a href="status-tracking.html" class="nav-link">
+                    <span class="material-icons">track_changes</span>
+                    Track Status
+                </a>
+                <a href="results.html" class="nav-link active">
+                    <span class="material-icons">download</span>
+                    Results
+                </a>
+                <a href="admin.html" class="nav-link">
+                    <span class="material-icons">admin_panel_settings</span>
+                    Admin
+                </a>
+            </div>
+            <div class="nav-user">
+                <span class="material-icons">account_circle</span>
+                <span>John Doe</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-container">
+        <div class="page-header">
+            <h1>Query Results</h1>
+            <p class="subtitle">Download and view your completed query results</p>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="section-card">
+            <div class="filter-bar">
+                <input type="text" placeholder="Search by request ID or description...">
+                <select>
+                    <option>All Environments</option>
+                    <option>Production</option>
+                    <option>Staging</option>
+                    <option>Development</option>
+                </select>
+                <select>
+                    <option>Last 7 Days</option>
+                    <option>Last 30 Days</option>
+                    <option>Last 90 Days</option>
+                    <option>All Time</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Result 1 -->
+        <div class="result-card">
+            <div class="result-header">
+                <div>
+                    <div class="result-title">User Activity Report</div>
+                    <div class="result-meta">
+                        <div class="result-meta-item">
+                            <span class="material-icons">tag</span>
+                            <span>#DV-2025-1247</span>
+                        </div>
+                        <div class="result-meta-item">
+                            <span class="material-icons">schedule</span>
+                            <span>Completed 15 minutes ago</span>
+                        </div>
+                        <div class="result-meta-item">
+                            <span class="material-icons">database</span>
+                            <span>Production</span>
+                        </div>
+                        <div class="result-meta-item">
+                            <span class="material-icons">timer</span>
+                            <span>Execution: 3.2 seconds</span>
+                        </div>
+                    </div>
+                </div>
+                <span class="status-badge status-completed">
+                    <span class="material-icons">check_circle</span>
+                    Completed
+                </span>
+            </div>
+
+            <div class="result-stats">
+                <div class="result-stat">
+                    <div class="result-stat-value">15,234</div>
+                    <div class="result-stat-label">Total Rows</div>
+                </div>
+                <div class="result-stat">
+                    <div class="result-stat-value">7</div>
+                    <div class="result-stat-label">Columns</div>
+                </div>
+                <div class="result-stat">
+                    <div class="result-stat-value">2.4 MB</div>
+                    <div class="result-stat-label">File Size</div>
+                </div>
+                <div class="result-stat">
+                    <div class="result-stat-value">100%</div>
+                    <div class="result-stat-label">Validated</div>
+                </div>
+            </div>
+
+            <div class="download-options">
+                <a href="#" class="download-btn">
+                    <span class="material-icons">description</span>
+                    Download CSV
+                </a>
+                <a href="#" class="download-btn">
+                    <span class="material-icons">table_chart</span>
+                    Download Excel
+                </a>
+                <a href="#" class="download-btn">
+                    <span class="material-icons">code</span>
+                    Download JSON
+                </a>
+                <a href="#" class="download-btn">
+                    <span class="material-icons">picture_as_pdf</span>
+                    Validation Report
+                </a>
+            </div>
+
+            <div class="validation-report">
+                <h4>
+                    <span class="material-icons">verified</span>
+                    AI Validation Report
+                </h4>
+                <div class="validation-checks">
+                    <div class="validation-check">
+                        <span class="material-icons">check_circle</span>
+                        <span>No anomalies detected</span>
+                    </div>
+                    <div class="validation-check">
+                        <span class="material-icons">check_circle</span>
+                        <span>Data quality: Excellent</span>
+                    </div>
+                    <div class="validation-check">
+                        <span class="material-icons">check_circle</span>
+                        <span>Row count within expected range</span>
+                    </div>
+                    <div class="validation-check">
+                        <span class="material-icons">check_circle</span>
+                        <span>No null values in critical fields</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="data-preview">
+                <div class="preview-header">
+                    <span>Data Preview (First 5 rows)</span>
+                    <a href="#" style="color: #667eea; text-decoration: none; font-size: 13px;">View Full Dataset</a>
+                </div>
+                <table class="preview-table">
+                    <thead>
+                        <tr>
+                            <th>user_id</th>
+                            <th>username</th>
+                            <th>email</th>
+                            <th>login_timestamp</th>
+                            <th>ip_address</th>
+                            <th>session_duration_minutes</th>
+                            <th>device_type</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>10234</td>
+                            <td>john.doe</td>
+                            <td>john.doe@company.com</td>
+                            <td>2025-12-07 09:15:23</td>
+                            <td>192.168.1.45</td>
+                            <td>127</td>
+                            <td>Desktop</td>
+                        </tr>
+                        <tr>
+                            <td>10567</td>
+                            <td>jane.smith</td>
+                            <td>jane.smith@company.com</td>
+                            <td>2025-12-07 08:42:11</td>
+                            <td>192.168.1.89</td>
+                            <td>95</td>
+                            <td>Mobile</td>
+                        </tr>
+                        <tr>
+                            <td>10891</td>
+                            <td>mike.johnson</td>
+                            <td>mike.johnson@company.com</td>
+                            <td>2025-12-07 07:30:05</td>
+                            <td>192.168.1.102</td>
+                            <td>203</td>
+                            <td>Desktop</td>
+                        </tr>
+                        <tr>
+                            <td>11024</td>
+                            <td>sarah.wilson</td>
+                            <td>sarah.wilson@company.com</td>
+                            <td>2025-12-06 16:22:47</td>
+                            <td>192.168.1.156</td>
+                            <td>145</td>
+                            <td>Tablet</td>
+                        </tr>
+                        <tr>
+                            <td>11298</td>
+                            <td>david.brown</td>
+                            <td>david.brown@company.com</td>
+                            <td>2025-12-06 14:11:33</td>
+                            <td>192.168.1.178</td>
+                            <td>88</td>
+                            <td>Mobile</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Result 2 -->
+        <div class="result-card">
+            <div class="result-header">
+                <div>
+                    <div class="result-title">Sales Data Extraction</div>
+                    <div class="result-meta">
+                        <div class="result-meta-item">
+                            <span class="material-icons">tag</span>
+                            <span>#DV-2025-1246</span>
+                        </div>
+                        <div class="result-meta-item">
+                            <span class="material-icons">schedule</span>
+                            <span>Completed 2 hours ago</span>
+                        </div>
+                        <div class="result-meta-item">
+                            <span class="material-icons">database</span>
+                            <span>Staging</span>
+                        </div>
+                        <div class="result-meta-item">
+                            <span class="material-icons">timer</span>
+                            <span>Execution: 1.8 seconds</span>
+                        </div>
+                    </div>
+                </div>
+                <span class="status-badge status-completed">
+                    <span class="material-icons">check_circle</span>
+                    Completed
+                </span>
+            </div>
+
+            <div class="result-stats">
+                <div class="result-stat">
+                    <div class="result-stat-value">8,492</div>
+                    <div class="result-stat-label">Total Rows</div>
+                </div>
+                <div class="result-stat">
+                    <div class="result-stat-value">12</div>
+                    <div class="result-stat-label">Columns</div>
+                </div>
+                <div class="result-stat">
+                    <div class="result-stat-value">1.8 MB</div>
+                    <div class="result-stat-label">File Size</div>
+                </div>
+                <div class="result-stat">
+                    <div class="result-stat-value">100%</div>
+                    <div class="result-stat-label">Validated</div>
+                </div>
+            </div>
+
+            <div class="download-options">
+                <a href="#" class="download-btn">
+                    <span class="material-icons">description</span>
+                    Download CSV
+                </a>
+                <a href="#" class="download-btn">
+                    <span class="material-icons">table_chart</span>
+                    Download Excel
+                </a>
+                <a href="#" class="download-btn">
+                    <span class="material-icons">code</span>
+                    Download JSON
+                </a>
+                <a href="#" class="download-btn">
+                    <span class="material-icons">picture_as_pdf</span>
+                    Validation Report
+                </a>
+            </div>
+        </div>
+
+        <!-- Result 3 -->
+        <div class="result-card">
+            <div class="result-header">
+                <div>
+                    <div class="result-title">Customer Segmentation Analysis</div>
+                    <div class="result-meta">
+                        <div class="result-meta-item">
+                            <span class="material-icons">tag</span>
+                            <span>#DV-2025-1245</span>
+                        </div>
+                        <div class="result-meta-item">
+                            <span class="material-icons">schedule</span>
+                            <span>Completed 1 day ago</span>
+                        </div>
+                        <div class="result-meta-item">
+                            <span class="material-icons">database</span>
+                            <span>Production</span>
+                        </div>
+                        <div class="result-meta-item">
+                            <span class="material-icons">timer</span>
+                            <span>Execution: 5.7 seconds</span>
+                        </div>
+                    </div>
+                </div>
+                <span class="status-badge status-completed">
+                    <span class="material-icons">check_circle</span>
+                    Completed
+                </span>
+            </div>
+
+            <div class="result-stats">
+                <div class="result-stat">
+                    <div class="result-stat-value">24,871</div>
+                    <div class="result-stat-label">Total Rows</div>
+                </div>
+                <div class="result-stat">
+                    <div class="result-stat-value">9</div>
+                    <div class="result-stat-label">Columns</div>
+                </div>
+                <div class="result-stat">
+                    <div class="result-stat-value">3.6 MB</div>
+                    <div class="result-stat-label">File Size</div>
+                </div>
+                <div class="result-stat">
+                    <div class="result-stat-value">100%</div>
+                    <div class="result-stat-label">Validated</div>
+                </div>
+            </div>
+
+            <div class="download-options">
+                <a href="#" class="download-btn">
+                    <span class="material-icons">description</span>
+                    Download CSV
+                </a>
+                <a href="#" class="download-btn">
+                    <span class="material-icons">table_chart</span>
+                    Download Excel
+                </a>
+                <a href="#" class="download-btn">
+                    <span class="material-icons">code</span>
+                    Download JSON
+                </a>
+                <a href="#" class="download-btn">
+                    <span class="material-icons">picture_as_pdf</span>
+                    Validation Report
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 DataVista. Powered by Azure OpenAI & Semantic Kernel</p>
+    </footer>
+</body>
+</html>

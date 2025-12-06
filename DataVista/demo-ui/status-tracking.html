@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status Tracking - DataVista</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        .request-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            color: white;
+            margin-bottom: 30px;
+        }
+        .request-info h2 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .request-meta {
+            display: flex;
+            gap: 25px;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .request-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .progress-timeline {
+            position: relative;
+            padding-left: 40px;
+        }
+        .timeline-item {
+            position: relative;
+            padding-bottom: 40px;
+        }
+        .timeline-item:last-child {
+            padding-bottom: 0;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -28px;
+            top: 0;
+            bottom: -40px;
+            width: 2px;
+            background: #e0e0e0;
+        }
+        .timeline-item:last-child::before {
+            display: none;
+        }
+        .timeline-icon {
+            position: absolute;
+            left: -40px;
+            top: 0;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border: 3px solid #e0e0e0;
+        }
+        .timeline-icon.completed {
+            background: #4caf50;
+            border-color: #4caf50;
+        }
+        .timeline-icon.active {
+            background: #2196f3;
+            border-color: #2196f3;
+            animation: pulse 2s infinite;
+        }
+        .timeline-icon.pending {
+            background: white;
+            border-color: #e0e0e0;
+        }
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.7);
+            }
+            50% {
+                box-shadow: 0 0 0 10px rgba(33, 150, 243, 0);
+            }
+        }
+        .timeline-icon .material-icons {
+            font-size: 14px;
+            color: white;
+        }
+        .timeline-content {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+        }
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 12px;
+        }
+        .timeline-title {
+            font-weight: 600;
+            color: #333;
+            font-size: 16px;
+        }
+        .timeline-time {
+            font-size: 13px;
+            color: #666;
+        }
+        .timeline-description {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+        .timeline-details {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            padding-top: 12px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .timeline-detail {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #666;
+        }
+        .timeline-detail .material-icons {
+            font-size: 16px;
+            color: #667eea;
+        }
+        .agent-activity {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 12px;
+        }
+        .agent-activity-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #667eea;
+        }
+        .agent-log {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #666;
+            background: #f5f5f5;
+            padding: 12px;
+            border-radius: 6px;
+            line-height: 1.6;
+        }
+        .query-preview {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            margin-top: 25px;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 25px;
+        }
+        @media (max-width: 768px) {
+            .request-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            .request-meta {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="material-icons">insights</span>
+                <span class="brand-text">DataVista</span>
+            </div>
+            <div class="nav-menu">
+                <a href="index.html" class="nav-link">
+                    <span class="material-icons">dashboard</span>
+                    Dashboard
+                </a>
+                <a href="submit-request.html" class="nav-link">
+                    <span class="material-icons">add_circle</span>
+                    Submit Request
+                </a>
+                <a href="status-tracking.html" class="nav-link active">
+                    <span class="material-icons">track_changes</span>
+                    Track Status
+                </a>
+                <a href="results.html" class="nav-link">
+                    <span class="material-icons">download</span>
+                    Results
+                </a>
+                <a href="admin.html" class="nav-link">
+                    <span class="material-icons">admin_panel_settings</span>
+                    Admin
+                </a>
+            </div>
+            <div class="nav-user">
+                <span class="material-icons">account_circle</span>
+                <span>John Doe</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-container">
+        <div class="page-header">
+            <h1>Request Status Tracking</h1>
+            <p class="subtitle">Real-time updates from AI agents</p>
+        </div>
+
+        <div class="section-card">
+            <div class="request-header">
+                <div class="request-info">
+                    <h2>User Activity Report</h2>
+                    <div class="request-meta">
+                        <div class="request-meta-item">
+                            <span class="material-icons">tag</span>
+                            <span>#DV-2025-1247</span>
+                        </div>
+                        <div class="request-meta-item">
+                            <span class="material-icons">person</span>
+                            <span>John Doe</span>
+                        </div>
+                        <div class="request-meta-item">
+                            <span class="material-icons">schedule</span>
+                            <span>Submitted 5 minutes ago</span>
+                        </div>
+                        <div class="request-meta-item">
+                            <span class="material-icons">database</span>
+                            <span>Production</span>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <span class="status-badge status-processing" style="font-size: 16px; padding: 10px 20px;">
+                        <span class="material-icons">autorenew</span>
+                        Processing
+                    </span>
+                </div>
+            </div>
+
+            <!-- Progress Timeline -->
+            <div class="progress-timeline">
+                <!-- Step 1: Received -->
+                <div class="timeline-item">
+                    <div class="timeline-icon completed">
+                        <span class="material-icons">check</span>
+                    </div>
+                    <div class="timeline-content">
+                        <div class="timeline-header">
+                            <div class="timeline-title">Request Received</div>
+                            <div class="timeline-time">5 minutes ago</div>
+                        </div>
+                        <div class="timeline-description">
+                            Your query request has been successfully submitted and assigned request ID #DV-2025-1247.
+                        </div>
+                        <div class="timeline-details">
+                            <div class="timeline-detail">
+                                <span class="material-icons">check_circle</span>
+                                <span>Request validated</span>
+                            </div>
+                            <div class="timeline-detail">
+                                <span class="material-icons">create</span>
+                                <span>Ticket created</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: AI Analysis -->
+                <div class="timeline-item">
+                    <div class="timeline-icon completed">
+                        <span class="material-icons">check</span>
+                    </div>
+                    <div class="timeline-content">
+                        <div class="timeline-header">
+                            <div class="timeline-title">Query Analysis Completed</div>
+                            <div class="timeline-time">4 minutes ago</div>
+                        </div>
+                        <div class="timeline-description">
+                            AI Query Analyzer Agent has validated your SQL query for security and performance.
+                        </div>
+                        <div class="agent-activity">
+                            <div class="agent-activity-header">
+                                <span class="material-icons">smart_toy</span>
+                                <span>Query Analyzer Agent</span>
+                            </div>
+                            <div class="agent-log">✓ SQL syntax validated<br>✓ No security threats detected (SQL injection check passed)<br>✓ No destructive operations found<br>✓ Estimated execution time: 3-5 seconds<br>✓ Estimated result rows: ~15,000<br>✓ Query complexity: Medium<br>✓ Auto-approved for execution</div>
+                        </div>
+                        <div class="timeline-details">
+                            <div class="timeline-detail">
+                                <span class="material-icons">verified</span>
+                                <span>Security validated</span>
+                            </div>
+                            <div class="timeline-detail">
+                                <span class="material-icons">speed</span>
+                                <span>Performance analyzed</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Execution -->
+                <div class="timeline-item">
+                    <div class="timeline-icon active">
+                        <span class="material-icons">sync</span>
+                    </div>
+                    <div class="timeline-content">
+                        <div class="timeline-header">
+                            <div class="timeline-title">Query Execution in Progress</div>
+                            <div class="timeline-time">2 minutes ago</div>
+                        </div>
+                        <div class="timeline-description">
+                            Execution Orchestrator Agent is running your query on the Production database.
+                        </div>
+                        <div class="agent-activity">
+                            <div class="agent-activity-header">
+                                <span class="material-icons">smart_toy</span>
+                                <span>Execution Orchestrator Agent</span>
+                            </div>
+                            <div class="agent-log">✓ Connected to Production environment<br>✓ Retrieved credentials from Azure Key Vault<br>✓ Connection established to Azure SQL Database<br>⟳ Executing query... (Progress: 68%)<br>⟳ Streaming results to Azure Blob Storage<br>⟳ 10,234 rows processed so far...</div>
+                        </div>
+                        <div class="timeline-details">
+                            <div class="timeline-detail">
+                                <span class="material-icons">cloud</span>
+                                <span>Environment: Production</span>
+                            </div>
+                            <div class="timeline-detail">
+                                <span class="material-icons">timer</span>
+                                <span>Elapsed: 3.2 seconds</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Validation (Pending) -->
+                <div class="timeline-item">
+                    <div class="timeline-icon pending">
+                        <span class="material-icons" style="color: #999;">schedule</span>
+                    </div>
+                    <div class="timeline-content" style="opacity: 0.6;">
+                        <div class="timeline-header">
+                            <div class="timeline-title">Result Validation</div>
+                            <div class="timeline-time">Pending</div>
+                        </div>
+                        <div class="timeline-description">
+                            Validation Agent will verify data quality and check for anomalies.
+                        </div>
+                        <div class="timeline-details">
+                            <div class="timeline-detail">
+                                <span class="material-icons">pending</span>
+                                <span>Waiting for execution to complete</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 5: Deployment (Pending) -->
+                <div class="timeline-item">
+                    <div class="timeline-icon pending">
+                        <span class="material-icons" style="color: #999;">schedule</span>
+                    </div>
+                    <div class="timeline-content" style="opacity: 0.6;">
+                        <div class="timeline-header">
+                            <div class="timeline-title">Result Deployment</div>
+                            <div class="timeline-time">Pending</div>
+                        </div>
+                        <div class="timeline-description">
+                            Deployment Agent will upload results to designated location.
+                        </div>
+                        <div class="timeline-details">
+                            <div class="timeline-detail">
+                                <span class="material-icons">pending</span>
+                                <span>Waiting for validation</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 6: Notification (Pending) -->
+                <div class="timeline-item">
+                    <div class="timeline-icon pending">
+                        <span class="material-icons" style="color: #999;">schedule</span>
+                    </div>
+                    <div class="timeline-content" style="opacity: 0.6;">
+                        <div class="timeline-header">
+                            <div class="timeline-title">Notification</div>
+                            <div class="timeline-time">Pending</div>
+                        </div>
+                        <div class="timeline-description">
+                            Communication Agent will send you an email and Teams notification when complete.
+                        </div>
+                        <div class="timeline-details">
+                            <div class="timeline-detail">
+                                <span class="material-icons">pending</span>
+                                <span>Waiting for deployment</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Query Preview -->
+            <h3 style="margin-top: 40px; margin-bottom: 15px; color: #333;">Query Details</h3>
+            <div class="query-preview">SELECT 
+    u.user_id,
+    u.username,
+    u.email,
+    l.login_timestamp,
+    l.ip_address,
+    l.session_duration_minutes,
+    l.device_type
+FROM 
+    users u
+INNER JOIN 
+    login_logs l ON u.user_id = l.user_id
+WHERE 
+    l.login_timestamp >= '2025-10-01'
+    AND l.login_timestamp < '2026-01-01'
+    AND u.status = 'active'
+ORDER BY 
+    l.login_timestamp DESC;</div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button class="btn btn-secondary">
+                    <span class="material-icons">cancel</span>
+                    Cancel Request
+                </button>
+                <button class="btn btn-secondary">
+                    <span class="material-icons">refresh</span>
+                    Refresh Status
+                </button>
+                <button class="btn btn-secondary">
+                    <span class="material-icons">chat</span>
+                    Chat with AI
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 DataVista. Powered by Azure OpenAI & Semantic Kernel</p>
+    </footer>
+</body>
+</html>

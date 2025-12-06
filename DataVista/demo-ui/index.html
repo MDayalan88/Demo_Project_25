@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataVista - AI-Powered Query Management</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="material-icons">insights</span>
+                <span class="brand-text">DataVista</span>
+            </div>
+            <div class="nav-menu">
+                <a href="index.html" class="nav-link active">
+                    <span class="material-icons">dashboard</span>
+                    Dashboard
+                </a>
+                <a href="submit-request.html" class="nav-link">
+                    <span class="material-icons">add_circle</span>
+                    Submit Request
+                </a>
+                <a href="status-tracking.html" class="nav-link">
+                    <span class="material-icons">track_changes</span>
+                    Track Status
+                </a>
+                <a href="results.html" class="nav-link">
+                    <span class="material-icons">download</span>
+                    Results
+                </a>
+                <a href="admin.html" class="nav-link">
+                    <span class="material-icons">admin_panel_settings</span>
+                    Admin
+                </a>
+            </div>
+            <div class="nav-user">
+                <span class="material-icons">account_circle</span>
+                <span>John Doe</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-container">
+        <!-- Header -->
+        <div class="page-header">
+            <h1>Dashboard</h1>
+            <p class="subtitle">Welcome back! Here's your query request overview</p>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon blue">
+                    <span class="material-icons">pending_actions</span>
+                </div>
+                <div class="stat-content">
+                    <h3>12</h3>
+                    <p>Pending Requests</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon green">
+                    <span class="material-icons">check_circle</span>
+                </div>
+                <div class="stat-content">
+                    <h3>847</h3>
+                    <p>Completed This Month</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon orange">
+                    <span class="material-icons">schedule</span>
+                </div>
+                <div class="stat-content">
+                    <h3>2.4 min</h3>
+                    <p>Avg. Processing Time</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon purple">
+                    <span class="material-icons">smart_toy</span>
+                </div>
+                <div class="stat-content">
+                    <h3>94%</h3>
+                    <p>AI Auto-Approved</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Requests -->
+        <div class="section-card">
+            <div class="section-header">
+                <h2>Recent Requests</h2>
+                <a href="submit-request.html" class="btn btn-primary">
+                    <span class="material-icons">add</span>
+                    New Request
+                </a>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Request ID</th>
+                            <th>Description</th>
+                            <th>Environment</th>
+                            <th>Status</th>
+                            <th>AI Agent</th>
+                            <th>Submitted</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="request-id">#DV-2025-1247</span></td>
+                            <td>User activity report for Q4</td>
+                            <td><span class="badge badge-prod">PRODUCTION</span></td>
+                            <td><span class="status-badge status-processing">
+                                <span class="material-icons">autorenew</span>
+                                Processing
+                            </span></td>
+                            <td><span class="agent-tag">Execution Orchestrator</span></td>
+                            <td>2 minutes ago</td>
+                            <td>
+                                <a href="status-tracking.html" class="action-btn" title="View Details">
+                                    <span class="material-icons">visibility</span>
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span class="request-id">#DV-2025-1246</span></td>
+                            <td>Sales data extraction</td>
+                            <td><span class="badge badge-staging">STAGING</span></td>
+                            <td><span class="status-badge status-completed">
+                                <span class="material-icons">check_circle</span>
+                                Completed
+                            </span></td>
+                            <td><span class="agent-tag">Validation Agent</span></td>
+                            <td>15 minutes ago</td>
+                            <td>
+                                <a href="results.html" class="action-btn" title="Download">
+                                    <span class="material-icons">download</span>
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span class="request-id">#DV-2025-1245</span></td>
+                            <td>Customer segmentation analysis</td>
+                            <td><span class="badge badge-prod">PRODUCTION</span></td>
+                            <td><span class="status-badge status-completed">
+                                <span class="material-icons">check_circle</span>
+                                Completed
+                            </span></td>
+                            <td><span class="agent-tag">Deployment Agent</span></td>
+                            <td>1 hour ago</td>
+                            <td>
+                                <a href="results.html" class="action-btn" title="Download">
+                                    <span class="material-icons">download</span>
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span class="request-id">#DV-2025-1244</span></td>
+                            <td>Inventory status report</td>
+                            <td><span class="badge badge-dev">DEVELOPMENT</span></td>
+                            <td><span class="status-badge status-validating">
+                                <span class="material-icons">verified</span>
+                                Validating
+                            </span></td>
+                            <td><span class="agent-tag">Query Analyzer</span></td>
+                            <td>2 hours ago</td>
+                            <td>
+                                <a href="status-tracking.html" class="action-btn" title="View Details">
+                                    <span class="material-icons">visibility</span>
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span class="request-id">#DV-2025-1243</span></td>
+                            <td>Monthly revenue dashboard data</td>
+                            <td><span class="badge badge-prod">PRODUCTION</span></td>
+                            <td><span class="status-badge status-completed">
+                                <span class="material-icons">check_circle</span>
+                                Completed
+                            </span></td>
+                            <td><span class="agent-tag">Communication Agent</span></td>
+                            <td>3 hours ago</td>
+                            <td>
+                                <a href="results.html" class="action-btn" title="Download">
+                                    <span class="material-icons">download</span>
+                                </a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- AI Agent Status -->
+        <div class="section-card">
+            <div class="section-header">
+                <h2>AI Agent Status</h2>
+                <span class="badge badge-success">All Systems Operational</span>
+            </div>
+
+            <div class="agent-grid">
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <span class="material-icons agent-icon">query_stats</span>
+                        <h3>Query Analyzer</h3>
+                    </div>
+                    <div class="agent-status">
+                        <span class="status-indicator active"></span>
+                        <span>Active</span>
+                    </div>
+                    <p class="agent-description">Validates SQL syntax, security, and complexity</p>
+                    <div class="agent-stats">
+                        <div class="agent-stat">
+                            <strong>1,247</strong>
+                            <span>Queries Analyzed Today</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <span class="material-icons agent-icon">settings</span>
+                        <h3>Execution Orchestrator</h3>
+                    </div>
+                    <div class="agent-status">
+                        <span class="status-indicator active"></span>
+                        <span>Active</span>
+                    </div>
+                    <p class="agent-description">Routes and executes queries across environments</p>
+                    <div class="agent-stats">
+                        <div class="agent-stat">
+                            <strong>1,189</strong>
+                            <span>Queries Executed Today</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <span class="material-icons agent-icon">verified_user</span>
+                        <h3>Validation Agent</h3>
+                    </div>
+                    <div class="agent-status">
+                        <span class="status-indicator active"></span>
+                        <span>Active</span>
+                    </div>
+                    <p class="agent-description">Performs quality checks and anomaly detection</p>
+                    <div class="agent-stats">
+                        <div class="agent-stat">
+                            <strong>1,182</strong>
+                            <span>Results Validated Today</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <span class="material-icons agent-icon">rocket_launch</span>
+                        <h3>Deployment Agent</h3>
+                    </div>
+                    <div class="agent-status">
+                        <span class="status-indicator active"></span>
+                        <span>Active</span>
+                    </div>
+                    <p class="agent-description">Automates PR creation and FTP deployment</p>
+                    <div class="agent-stats">
+                        <div class="agent-stat">
+                            <strong>847</strong>
+                            <span>Deployments Today</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <span class="material-icons agent-icon">notifications_active</span>
+                        <h3>Communication Agent</h3>
+                    </div>
+                    <div class="agent-status">
+                        <span class="status-indicator active"></span>
+                        <span>Active</span>
+                    </div>
+                    <p class="agent-description">Sends notifications and handles chat queries</p>
+                    <div class="agent-stats">
+                        <div class="agent-stat">
+                            <strong>2,341</strong>
+                            <span>Notifications Sent Today</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2025 DataVista. Powered by Azure OpenAI & Semantic Kernel</p>
+    </footer>
+</body>
+</html>
