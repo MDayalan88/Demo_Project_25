@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  fileferry-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DD_ENABLED=${DD_ENABLED}
+      - DD_AGENT_HOST=${DD_AGENT_HOST}
+      - DD_STATSD_PORT=${DD_STATSD_PORT}
+      - TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - FILEFERRY_CONFIG_PATH=${FILEFERRY_CONFIG_PATH}
+      - FILEFERRY_NUM_WORKERS=${FILEFERRY_NUM_WORKERS}
+      - FILEFERRY_LOG_LEVEL=${FILEFERRY_LOG_LEVEL}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./logs:/app/logs
+    depends_on:
+      - s3
+
+  s3:
+    image: amazon/aws-cli
+    command: s3api create-bucket --bucket your-bucket-name --region ${AWS_REGION}
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - ./s3:/app/s3
+
+networks:
+  default:
+    driver: bridge

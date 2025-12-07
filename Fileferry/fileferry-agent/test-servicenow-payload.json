@@ -1,0 +1,10 @@
+{
+  "servicenow_tickets": ["INC0010001", "INC0010002"],
+  "transfer_result": {
+    "status": "completed",
+    "bytes_transferred": 1048576,
+    "remote_path": "/uploads/test-file.txt",
+    "md5_checksum": "abc123def456789",
+    "completed_at": "2025-12-05T10:30:00Z"
+  }
+}

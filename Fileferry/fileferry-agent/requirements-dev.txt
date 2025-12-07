@@ -1,0 +1,10 @@
+requirements-dev.txt
+Flask==2.0.1
+boto3==1.18.67
+pytest==6.2.4
+pytest-cov==2.12.1
+moto==2.2.9
+black==21.7b0
+flake8==3.9.2
+isort==5.9.3
+requests==2.26.0

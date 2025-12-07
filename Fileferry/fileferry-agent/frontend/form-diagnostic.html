@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Form Navigation Diagnostic Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .diagnostic-section {
+            background: #f7fafc;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        .diagnostic-section h2 {
+            font-size: 18px;
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .status.success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        .status.error {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+        .status.warning {
+            background: #feebc8;
+            color: #7c2d12;
+        }
+        .icon {
+            margin-right: 10px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-top: 10px;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .code-block {
+            background: #2d3748;
+            color: #68d391;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+        .test-form {
+            background: white;
+            border: 2px solid #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #2d3748;
+            font-size: 14px;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .submit-btn {
+            width: 100%;
+            margin-top: 10px;
+        }
+        .submit-btn:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+        #console-output {
+            background: #1a202c;
+            color: #68d391;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .console-line {
+            margin-bottom: 5px;
+        }
+        .console-error {
+            color: #fc8181;
+        }
+        .console-success {
+            color: #68d391;
+        }
+        .console-info {
+            color: #63b3ed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Form Navigation Diagnostic Tool</h1>
+        <p class="subtitle">Test and diagnose form navigation issues in FileFerry UI</p>
+
+        <div class="diagnostic-section">
+            <h2>System Status</h2>
+            <div id="system-status"></div>
+            <button onclick="runDiagnostics()">🔍 Run Diagnostics</button>
+            <button onclick="clearLocalStorage()">🗑️ Clear LocalStorage</button>
+            <button onclick="testNavigation()">🧭 Test Navigation</button>
+        </div>
+
+        <div class="diagnostic-section">
+            <h2>Test Form (Simulates FileFerry Form)</h2>
+            <form id="test-form" class="test-form">
+                <div class="form-group">
+                    <label>Assignment Group *</label>
+                    <select name="assignmentGroup" required>
+                        <option value="">Select...</option>
+                        <option value="DataOps Team">DataOps Team</option>
+                        <option value="DevOps Team">DevOps Team</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Environment *</label>
+                    <select name="environment" required>
+                        <option value="">Select...</option>
+                        <option value="PROD">Production</option>
+                        <option value="QA">QA</option>
+                        <option value="UAT">UAT</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Bucket Name *</label>
+                    <input type="text" name="bucketName" placeholder="my-s3-bucket" required>
+                </div>
+                <div class="form-group">
+                    <label>File Name *</label>
+                    <input type="text" name="fileName" placeholder="data-export.csv" required>
+                </div>
+                <div class="form-group">
+                    <label>Priority *</label>
+                    <select name="priority" required>
+                        <option value="">Select...</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                </div>
+                <button type="submit" class="submit-btn" id="submit-btn">Submit Form (Test Navigation)</button>
+            </form>
+        </div>
+
+        <div class="diagnostic-section">
+            <h2>Console Output</h2>
+            <div id="console-output"></div>
+        </div>
+    </div>
+
+    <script>
+        const consoleOutput = document.getElementById('console-output');
+        
+        function log(message, type = 'info') {
+            const line = document.createElement('div');
+            line.className = `console-line console-${type}`;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            consoleOutput.appendChild(line);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            console.log(message);
+        }
+
+        function runDiagnostics() {
+            const statusDiv = document.getElementById('system-status');
+            statusDiv.innerHTML = '';
+            
+            log('🔍 Running diagnostics...', 'info');
+
+            // Check browser support
+            const checks = [
+                {
+                    name: 'LocalStorage Available',
+                    test: () => typeof(Storage) !== "undefined",
+                    fix: 'Enable cookies/storage in browser settings'
+                },
+                {
+                    name: 'JavaScript Enabled',
+                    test: () => true,
+                    fix: 'N/A'
+                },
+                {
+                    name: 'Form API Support',
+                    test: () => typeof FormData !== 'undefined',
+                    fix: 'Update browser to latest version'
+                },
+                {
+                    name: 'History API Support',
+                    test: () => typeof history !== 'undefined' && typeof history.pushState === 'function',
+                    fix: 'Update browser to latest version'
+                },
+                {
+                    name: 'Authentication Status',
+                    test: () => localStorage.getItem('isAuthenticated') === 'true',
+                    fix: 'Click "Set Authentication" button below'
+                }
+            ];
+
+            checks.forEach(check => {
+                const result = check.test();
+                const statusEl = document.createElement('div');
+                statusEl.className = `status ${result ? 'success' : 'error'}`;
+                statusEl.innerHTML = `
+                    <span class="icon">${result ? '✅' : '❌'}</span>
+                    <div>
+                        <strong>${check.name}</strong>
+                        ${!result ? `<br><small>Fix: ${check.fix}</small>` : ''}
+                    </div>
+                `;
+                statusDiv.appendChild(statusEl);
+                
+                log(`${check.name}: ${result ? 'PASS' : 'FAIL'}`, result ? 'success' : 'error');
+            });
+
+            // Check current localStorage data
+            const transferRequest = localStorage.getItem('transferRequest');
+            if (transferRequest) {
+                log('Found existing transfer request data', 'info');
+                log(transferRequest, 'info');
+            } else {
+                log('No transfer request data found', 'warning');
+            }
+
+            log('✅ Diagnostics complete', 'success');
+        }
+
+        function clearLocalStorage() {
+            localStorage.clear();
+            log('🗑️ LocalStorage cleared', 'success');
+            runDiagnostics();
+        }
+
+        function testNavigation() {
+            log('🧭 Testing navigation...', 'info');
+            
+            // Set authentication
+            localStorage.setItem('isAuthenticated', 'true');
+            log('✅ Set authentication status', 'success');
+            
+            // Test if we can change location
+            try {
+                const currentPath = window.location.pathname;
+                log(`Current path: ${currentPath}`, 'info');
+                log('Navigation API is working', 'success');
+            } catch (error) {
+                log(`Navigation error: ${error.message}`, 'error');
+            }
+            
+            runDiagnostics();
+        }
+
+        // Form handling
+        const form = document.getElementById('test-form');
+        const submitBtn = document.getElementById('submit-btn');
+
+        form.addEventListener('input', () => {
+            const isValid = form.checkValidity();
+            submitBtn.disabled = !isValid;
+            
+            if (isValid) {
+                submitBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                log('✅ Form is valid', 'success');
+            } else {
+                submitBtn.style.background = '#cbd5e0';
+                log('⚠️ Form is incomplete', 'warning');
+            }
+        });
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            log('📝 Form submitted', 'info');
+            
+            const formData = new FormData(form);
+            const data = {};
+            formData.forEach((value, key) => {
+                data[key] = value;
+            });
+            
+            log('Form data: ' + JSON.stringify(data, null, 2), 'info');
+            
+            // Simulate form validation
+            const isValid = form.checkValidity();
+            
+            if (isValid) {
+                log('✅ Form validation passed', 'success');
+                
+                // Store in localStorage (simulating React app behavior)
+                localStorage.setItem('transferRequest', JSON.stringify(data));
+                log('✅ Data saved to localStorage', 'success');
+                
+                // Simulate navigation
+                log('🚀 Navigation would occur here in React app', 'success');
+                log('Target: /app/aws-sso', 'info');
+                
+                // Show success message
+                alert('✅ Form submission successful!\n\nIn the actual app, you would now navigate to /app/aws-sso\n\nCheck the console output for details.');
+            } else {
+                log('❌ Form validation failed', 'error');
+                
+                // Find invalid fields
+                const invalidFields = form.querySelectorAll(':invalid');
+                invalidFields.forEach(field => {
+                    log(`❌ Invalid field: ${field.name}`, 'error');
+                });
+            }
+        });
+
+        // Run diagnostics on load
+        window.addEventListener('load', () => {
+            log('🚀 Diagnostic tool loaded', 'success');
+            runDiagnostics();
+        });
+    </script>
+</body>
+</html>

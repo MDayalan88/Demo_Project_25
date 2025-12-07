@@ -1,0 +1,131 @@
+{
+  "Comment": "FileFerry Transfer State Machine - Orchestrates S3 to FTP/SFTP file transfers",
+  "StartAt": "ValidateInput",
+  "States": {
+    "ValidateInput": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:FileFerry-ValidateInput",
+      "ResultPath": "$.validation",
+      "Next": "AuthenticateSSO",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "HandleError"
+        }
+      ]
+    },
+    "AuthenticateSSO": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:FileFerry-AuthSSO",
+      "ResultPath": "$.ssoSession",
+      "Next": "DownloadFromS3",
+      "TimeoutSeconds": 30,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "HandleError"
+        }
+      ]
+    },
+    "DownloadFromS3": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:FileFerry-DownloadS3",
+      "ResultPath": "$.s3Download",
+      "Next": "CheckFileSize",
+      "TimeoutSeconds": 300,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "CleanupAndLogout"
+        }
+      ]
+    },
+    "CheckFileSize": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.transferStrategy.transferType",
+          "StringEquals": "parallel",
+          "Next": "ParallelTransfer"
+        },
+        {
+          "Variable": "$.transferStrategy.transferType",
+          "StringEquals": "direct",
+          "Next": "DirectTransfer"
+        }
+      ],
+      "Default": "DirectTransfer"
+    },
+    "DirectTransfer": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:FileFerry-DirectTransfer",
+      "ResultPath": "$.transferResult",
+      "Next": "UpdateServiceNowTicket",
+      "TimeoutSeconds": 600,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "CleanupAndLogout"
+        }
+      ]
+    },
+    "ParallelTransfer": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:FileFerry-ParallelTransfer",
+      "ResultPath": "$.transferResult",
+      "Next": "UpdateServiceNowTicket",
+      "TimeoutSeconds": 1800,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "CleanupAndLogout"
+        }
+      ]
+    },
+    "UpdateServiceNowTicket": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:FileFerry-UpdateServiceNow",
+      "ResultPath": "$.ticketUpdate",
+      "Next": "CleanupAndLogout",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "CleanupAndLogout"
+        }
+      ]
+    },
+    "CleanupAndLogout": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:FileFerry-Cleanup",
+      "ResultPath": "$.cleanup",
+      "Next": "StoreOutcome"
+    },
+    "StoreOutcome": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:FileFerry-StoreLearning",
+      "ResultPath": "$.learning",
+      "Next": "SendNotification"
+    },
+    "SendNotification": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:FileFerry-SendNotification",
+      "ResultPath": "$.notification",
+      "Next": "TransferComplete"
+    },
+    "HandleError": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:FileFerry-HandleError",
+      "ResultPath": "$.errorHandling",
+      "Next": "CleanupAndLogout"
+    },
+    "TransferComplete": {
+      "Type": "Succeed"
+    }
+  }
+}

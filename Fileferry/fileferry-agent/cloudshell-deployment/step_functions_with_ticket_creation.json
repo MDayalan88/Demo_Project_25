@@ -1,0 +1,137 @@
+{
+  "Comment": "FileFerry Transfer State Machine with ServiceNow Ticket Creation",
+  "StartAt": "CreateServiceNowTickets",
+  "States": {
+    "CreateServiceNowTickets": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:637423332185:function:FileFerry-CreateServiceNowTickets",
+      "Comment": "Create ServiceNow tickets before starting transfer",
+      "ResultPath": "$.ticket_creation_result",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "ValidateInput",
+          "ResultPath": "$.ticket_creation_error"
+        }
+      ],
+      "Next": "MergeTicketsWithInput"
+    },
+    "MergeTicketsWithInput": {
+      "Type": "Pass",
+      "Comment": "Merge created ticket numbers into main event",
+      "Parameters": {
+        "user_id.$": "$.user_id",
+        "transfer_plan.$": "$.transfer_plan",
+        "servicenow_tickets.$": "$.ticket_creation_result.servicenow_tickets",
+        "ticket_details.$": "$.ticket_creation_result.ticket_details"
+      },
+      "Next": "ValidateInput"
+    },
+    "ValidateInput": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:637423332185:function:FileFerry-ValidateInput",
+      "Comment": "Validate transfer request",
+      "ResultPath": "$.validation_result",
+      "Next": "DownloadFromS3"
+    },
+    "DownloadFromS3": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:637423332185:function:FileFerry-DownloadS3",
+      "Comment": "Download file from S3",
+      "ResultPath": "$.download_result",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "UpdateServiceNowFailure",
+          "ResultPath": "$.download_error"
+        }
+      ],
+      "Next": "CheckFileSize"
+    },
+    "CheckFileSize": {
+      "Type": "Choice",
+      "Comment": "Determine if chunked transfer needed",
+      "Choices": [
+        {
+          "Variable": "$.download_result.size_bytes",
+          "NumericGreaterThan": 104857600,
+          "Next": "ChunkedTransfer"
+        }
+      ],
+      "Default": "TransferToFTP"
+    },
+    "TransferToFTP": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:637423332185:function:FileFerry-TransferFTP",
+      "Comment": "Transfer file to FTP server",
+      "ResultPath": "$.transfer_result",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "UpdateServiceNowFailure",
+          "ResultPath": "$.transfer_error"
+        }
+      ],
+      "Next": "UpdateServiceNowSuccess"
+    },
+    "ChunkedTransfer": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:637423332185:function:FileFerry-ChunkedTransfer",
+      "Comment": "Transfer large file in chunks",
+      "ResultPath": "$.transfer_result",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "UpdateServiceNowFailure",
+          "ResultPath": "$.transfer_error"
+        }
+      ],
+      "Next": "UpdateServiceNowSuccess"
+    },
+    "UpdateServiceNowSuccess": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:637423332185:function:FileFerry-UpdateServiceNow",
+      "Comment": "Update ServiceNow tickets with success",
+      "Parameters": {
+        "servicenow_tickets.$": "$.servicenow_tickets",
+        "transfer_result": {
+          "status": "completed",
+          "bytes_transferred.$": "$.transfer_result.bytes_transferred",
+          "remote_path.$": "$.transfer_result.remote_path",
+          "md5_checksum.$": "$.transfer_result.md5_checksum",
+          "completed_at.$": "$.transfer_result.completed_at"
+        }
+      },
+      "ResultPath": "$.servicenow_update_result",
+      "Next": "NotifyUser"
+    },
+    "UpdateServiceNowFailure": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:637423332185:function:FileFerry-UpdateServiceNow",
+      "Comment": "Update ServiceNow tickets with failure",
+      "Parameters": {
+        "servicenow_tickets.$": "$.servicenow_tickets",
+        "transfer_result": {
+          "status": "failed",
+          "error.$": "$.transfer_error.Error"
+        }
+      },
+      "ResultPath": "$.servicenow_update_result",
+      "Next": "Cleanup"
+    },
+    "NotifyUser": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:637423332185:function:FileFerry-NotifyUser",
+      "Comment": "Send completion notification",
+      "ResultPath": "$.notification_result",
+      "Next": "Cleanup"
+    },
+    "Cleanup": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:637423332185:function:FileFerry-Cleanup",
+      "Comment": "Clean up temporary files",
+      "ResultPath": "$.cleanup_result",
+      "End": true
+    }
+  }
+}

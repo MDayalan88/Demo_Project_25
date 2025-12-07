@@ -1,0 +1,35 @@
+{
+  "lambda": {
+    "function_name": "FileFerryAgentFunction",
+    "runtime": "python3.8",
+    "handler": "src.handlers.transfer_handler.lambda_handler",
+    "role": "arn:aws:iam::YOUR_ACCOUNT_ID:role/YOUR_LAMBDA_ROLE",
+    "memory_size": 128,
+    "timeout": 30,
+    "environment": {
+      "AWS_REGION": "us-east-1",
+      "S3_BUCKET": "your-s3-bucket-name",
+      "TEAMS_WEBHOOK_URL": "your_teams_webhook_url",
+      "DD_ENABLED": "false",
+      "DD_AGENT_HOST": "127.0.0.1",
+      "DD_STATSD_PORT": "8125"
+    },
+    "events": [
+      {
+        "event_source": "aws:s3",
+        "event_type": "s3:ObjectCreated:*",
+        "source_arn": "arn:aws:s3:::your-s3-bucket-name",
+        "filter": {
+          "key": {
+            "filter_rules": [
+              {
+                "name": "suffix",
+                "value": ".txt"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
