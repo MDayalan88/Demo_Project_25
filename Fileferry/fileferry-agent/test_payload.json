@@ -1,3 +1,0 @@
-{
-  "body": "{\"user_id\":\"martin@fileferry.com\",\"source\":{\"type\":\"s3\",\"bucket\":\"my-test-bucket\",\"key\":\"test-file.txt\"},\"destination\":{\"type\":\"ftp\",\"host\":\"ftp.example.com\",\"path\":\"/uploads/test-file.txt\"},\"ticket_number\":\"INC0010002\"}"
-}
