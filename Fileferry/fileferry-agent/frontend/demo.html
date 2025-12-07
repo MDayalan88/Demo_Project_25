@@ -1,0 +1,2768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FileFerry - File Transfer Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // ============================================================================
+        // API Configuration - Update this with your API Gateway URL
+        // ============================================================================
+        const API_BASE_URL = 'https://gwosr3m399.execute-api.us-east-1.amazonaws.com/prod';
+        
+        // API Endpoints
+        const API_ENDPOINTS = {
+            startTransfer: `${API_BASE_URL}/transfer/start`,
+            getStatus: (executionId) => `${API_BASE_URL}/transfer/status/${executionId}`,
+            getHistory: `${API_BASE_URL}/transfer/history`
+        };
+        
+        // ============================================================================
+        // FTP Configuration - Update with your FTP server details
+        // ============================================================================
+        const FTP_CONFIG = {
+            host: 'ftp.example.com',         // Your FTP server hostname or IP
+            port: 21,                         // FTP port (usually 21)
+            username: 'ftpuser',              // FTP username
+            password: 'ftppass',              // FTP password
+            destinationPath: '/uploads/'      // Remote directory path
+        };
+        
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'fade-in': 'fadeIn 0.6s ease-out',
+                        'slide-up': 'slideUp 0.7s ease-out',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .hero-background {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-background::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(circle at 20% 50%, rgba(255,255,255,0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255,255,255,0.1) 0%, transparent 50%);
+            animation: float 20s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        .superhero-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .cloud {
+            position: absolute;
+            background: rgba(255,255,255,0.3);
+            border-radius: 100px;
+            animation: drift 30s linear infinite;
+        }
+        .cloud::before,
+        .cloud::after {
+            content: '';
+            position: absolute;
+            background: rgba(255,255,255,0.3);
+            border-radius: 100px;
+        }
+        .cloud-1 { width: 100px; height: 40px; top: 20%; left: -100px; }
+        .cloud-1::before { width: 50px; height: 40px; top: -20px; left: 10px; }
+        .cloud-1::after { width: 60px; height: 35px; top: -10px; right: 10px; }
+        .cloud-2 { width: 120px; height: 50px; top: 60%; left: -120px; animation-delay: -10s; }
+        .cloud-2::before { width: 60px; height: 50px; top: -25px; left: 15px; }
+        .cloud-2::after { width: 70px; height: 45px; top: -15px; right: 15px; }
+        @keyframes drift {
+            from { transform: translateX(0); }
+            to { transform: translateX(100vw); }
+        }
+        .server-icon {
+            position: absolute;
+            right: 10%;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 80px;
+            opacity: 0.2;
+            animation: pulse 3s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: translateY(-50%) scale(1); opacity: 0.2; }
+            50% { transform: translateY(-50%) scale(1.1); opacity: 0.3; }
+        }
+        .data-stream {
+            position: absolute;
+            width: 2px;
+            height: 20px;
+            background: linear-gradient(to bottom, transparent, #fff, transparent);
+            animation: stream 2s linear infinite;
+        }
+        @keyframes stream {
+            from { transform: translateY(-100px); opacity: 0; }
+            50% { opacity: 1; }
+            to { transform: translateY(100px); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Container for all pages -->
+    <div id="app"></div>
+
+    <script>
+        // Simple router state
+        let currentPage = 'login';
+        let userData = { username: '', isAuthenticated: false };
+        let transferData = {};
+        let pageTimer = null;
+        let remainingSeconds = 60;
+        let transferProgress = 0;
+        let transferTimer = null;
+        let selectedFilesForDownload = [];
+        let showProfileDropdown = false;
+        
+        // Session statistics tracking (AWS-only)
+        let sessionStats = {
+            totalTransfers: 0,
+            successfulTransfers: 0,
+            awsTransfers: 0,
+            startTime: Date.now()
+        };
+
+        // S3 Buckets with sample files for dropdowns
+        const s3Buckets = {
+            'fileferry-demo-bucket': [
+                { name: 'customer-data-2024.csv', size: '2.3 MB', modified: '2024-12-01 10:30 AM', type: 'CSV' },
+                { name: 'sales-report-q4.xlsx', size: '5.7 MB', modified: '2024-12-02 02:15 PM', type: 'Excel' },
+                { name: 'backup-archive.zip', size: '125 MB', modified: '2024-11-30 11:45 AM', type: 'ZIP' },
+                { name: 'images/logo.png', size: '342 KB', modified: '2024-12-03 03:20 PM', type: 'Image' },
+                { name: 'documents/contract.pdf', size: '892 KB', modified: '2024-11-28 01:10 PM', type: 'PDF' },
+                { name: 'large-dataset.parquet', size: '1.2 TB', modified: '2024-12-04 09:00 AM', type: 'Parquet' }
+            ],
+            'fileferry-backup-bucket': [
+                { name: 'backup-full-20241201.zip', size: '15.2 GB', modified: '2024-12-01 02:00 AM', type: 'ZIP' },
+                { name: 'backup-incremental-20241202.zip', size: '2.8 GB', modified: '2024-12-02 02:00 AM', type: 'ZIP' },
+                { name: 'backup-logs-november.tar.gz', size: '450 MB', modified: '2024-11-30 11:30 PM', type: 'Archive' },
+                { name: 'backup-config-20241203.json', size: '125 KB', modified: '2024-12-03 02:15 AM', type: 'JSON' }
+            ],
+            'fileferry-archive-2024': [
+                { name: 'q1-financial-reports.zip', size: '890 MB', modified: '2024-04-01 05:00 PM', type: 'ZIP' },
+                { name: 'q2-audit-documents.zip', size: '1.2 GB', modified: '2024-07-01 05:00 PM', type: 'ZIP' },
+                { name: 'q3-compliance-records.zip', size: '765 MB', modified: '2024-10-01 05:00 PM', type: 'ZIP' },
+                { name: 'yearly-summary-2024.pdf', size: '45 MB', modified: '2024-12-01 09:00 AM', type: 'PDF' }
+            ],
+            'fileferry-reports-prod': [
+                { name: 'monthly-sales-november.xlsx', size: '12.3 MB', modified: '2024-11-30 06:00 PM', type: 'Excel' },
+                { name: 'customer-analytics-q4.csv', size: '8.7 MB', modified: '2024-12-02 10:30 AM', type: 'CSV' },
+                { name: 'revenue-forecast-2025.xlsx', size: '5.2 MB', modified: '2024-12-03 03:45 PM', type: 'Excel' },
+                { name: 'executive-dashboard-dec.pdf', size: '2.1 MB', modified: '2024-12-04 08:00 AM', type: 'PDF' }
+            ],
+            'fileferry-dev-testing': [
+                { name: 'test-data-sample.csv', size: '500 KB', modified: '2024-12-04 11:00 AM', type: 'CSV' },
+                { name: 'api-mock-responses.json', size: '125 KB', modified: '2024-12-03 02:30 PM', type: 'JSON' },
+                { name: 'load-test-results.log', size: '8.9 MB', modified: '2024-12-02 04:15 PM', type: 'Log' },
+                { name: 'performance-metrics.xlsx', size: '3.2 MB', modified: '2024-12-01 01:20 PM', type: 'Excel' }
+            ]
+        };
+
+        // Lucide icons as SVG strings
+        const icons = {
+            user: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>',
+            lock: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>',
+            zap: '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>',
+            fileText: '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
+            gitBranch: '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>',
+            arrowRight: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>',
+            home: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
+            checkCircle: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>',
+            shield: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>',
+            folder: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>',
+            file: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>',
+            server: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>',
+            download: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>',
+            logOut: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>',
+        };
+
+        // Login Page
+        function renderLoginPage() {
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-purple-600 via-indigo-600 to-purple-800 flex items-center justify-center p-4">
+                    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md animate-slide-up">
+                        <div class="text-center mb-8">
+                            <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-full mb-4">
+                                ${icons.zap}
+                            </div>
+                            <h1 class="text-3xl font-bold text-gray-900 mb-2">FileFerry</h1>
+                            <p class="text-gray-600">Sign in to your account</p>
+                        </div>
+
+                        <form id="loginForm" class="space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Username</label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                        ${icons.user}
+                                    </div>
+                                    <input type="text" id="username" value="MartinDayalan" readonly class="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-100 text-gray-700 cursor-not-allowed outline-none" required>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                        ${icons.lock}
+                                    </div>
+                                    <input type="password" id="password" class="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all" placeholder="Enter your password" required>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-3 rounded-xl font-medium hover:from-purple-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl">
+                                Sign In
+                            </button>
+                        </form>
+
+                        <div class="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+                            <p class="text-sm text-blue-800"><strong>Demo Mode:</strong> Use any username and password to login</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Main Dashboard
+        function renderDashboard() {
+            // Calculate real-time statistics
+            const activeTransfers = sessionStats.awsTransfers;
+            const successRate = sessionStats.totalTransfers > 0 
+                ? ((sessionStats.successfulTransfers / sessionStats.totalTransfers) * 100).toFixed(1)
+                : '100.0';
+            
+            // Calculate cost savings (AWS-only = 0%)
+            const costSavings = '0';
+            
+            // Calculate time taken in session
+            const sessionTimeMinutes = Math.floor((Date.now() - sessionStats.startTime) / 60000);
+            const sessionTimeDisplay = sessionTimeMinutes < 60 
+                ? `${sessionTimeMinutes}min`
+                : `${Math.floor(sessionTimeMinutes / 60)}h ${sessionTimeMinutes % 60}m`;
+            
+            return `
+                <div class="min-h-screen bg-gray-50">
+                    <!-- Header -->
+                    <div class="bg-white border-b border-gray-200 px-6 py-4">
+                        <div class="max-w-7xl mx-auto flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                                </div>
+                                <h1 class="text-xl font-bold text-gray-900">FileFerry</h1>
+                            </div>
+                            <div class="flex items-center space-x-3 relative">
+                                <span class="text-sm text-gray-600">Welcome, <strong>${userData.username}</strong></span>
+                                <button onclick="toggleProfileDropdown()" class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center hover:bg-purple-200 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                    <span class="text-purple-600 font-semibold">${userData.username.charAt(0).toUpperCase()}</span>
+                                </button>
+                                
+                                <!-- Dropdown Menu -->
+                                <div id="profileDropdown" class="absolute right-0 top-12 bg-white rounded-lg shadow-lg border border-gray-200 w-48 hidden z-50">
+                                    <div class="p-3 border-b border-gray-100">
+                                        <p class="text-sm font-semibold text-gray-900">${userData.username}</p>
+                                        <p class="text-xs text-gray-500">FileFerry User</p>
+                                    </div>
+                                    <button onclick="logout()" class="w-full flex items-center space-x-2 px-4 py-3 text-left hover:bg-red-50 transition-colors text-red-600 text-sm font-medium">
+                                        ${icons.logOut}
+                                        <span>Logout</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Content -->
+                    <div class="max-w-7xl mx-auto px-6 py-12">
+                        <!-- Hero Section with Background Animation -->
+                        <div class="hero-background rounded-3xl p-12 mb-12 relative" style="min-height: 400px;">
+                            <!-- Animated Clouds -->
+                            <div class="superhero-container">
+                                <div class="cloud cloud-1"></div>
+                                <div class="cloud cloud-2"></div>
+                                <!-- Data Streams -->
+                                <div class="data-stream" style="left: 30%; animation-delay: 0s;"></div>
+                                <div class="data-stream" style="left: 50%; animation-delay: 0.7s;"></div>
+                                <div class="data-stream" style="left: 70%; animation-delay: 1.4s;"></div>
+                                <!-- Server Icon -->
+                                <div class="server-icon">🖥️</div>
+                            </div>
+                            
+                            <!-- Welcome Text -->
+                            <div class="text-center mb-8 relative z-10">
+                                <div class="text-6xl mb-4 animate-bounce">🦸‍♂️</div>
+                                <h2 class="text-4xl font-bold text-white mb-3">Welcome to FileFerry</h2>
+                                <p class="text-purple-100 text-lg">Your superhero for secure file transfers</p>
+                            </div>
+
+                            <!-- Centered FileFerry Card -->
+                            <div class="flex justify-center relative z-10">
+                                <div onclick="navigateTo('file-transfer')" class="bg-white/10 backdrop-blur-md rounded-2xl p-10 cursor-pointer hover:bg-white/20 hover:-translate-y-2 hover:shadow-2xl transition-all duration-300 group max-w-md w-full border-2 border-white/30">
+                                    <div class="flex items-center justify-between mb-6">
+                                        <div class="w-20 h-20 bg-white/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            ${icons.fileText}
+                                        </div>
+                                        <div class="text-white/90 group-hover:translate-x-2 transition-transform">
+                                            ${icons.arrowRight}
+                                        </div>
+                                    </div>
+                                    <h3 class="text-3xl font-bold text-white mb-3">Start Transfer</h3>
+                                    <p class="text-purple-100 text-lg">Initiate secure file transfer to FTP server</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Navigation Cards Section Removed -->
+
+                        <!-- Stats Cards - Dynamic Real-time Statistics -->
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div class="bg-white rounded-xl p-6 shadow-md border border-gray-100">
+                                <p class="text-sm text-gray-600 mb-1">Session Transfers</p>
+                                <p class="text-3xl font-bold text-blue-600">${activeTransfers}</p>
+                                <p class="text-xs text-gray-500 mt-1">AWS: ${sessionStats.awsTransfers}</p>
+                            </div>
+                            <div class="bg-white rounded-xl p-6 shadow-md border border-gray-100">
+                                <p class="text-sm text-gray-600 mb-1">Success Rate</p>
+                                <p class="text-3xl font-bold text-green-600">${successRate}%</p>
+                                <p class="text-xs text-gray-500 mt-1">${sessionStats.successfulTransfers}/${sessionStats.totalTransfers} completed</p>
+                            </div>
+                            <div class="bg-white rounded-xl p-6 shadow-md border border-gray-100">
+                                <p class="text-sm text-gray-600 mb-1">Cost Savings</p>
+                                <p class="text-3xl font-bold text-purple-600">${costSavings}%</p>
+                                <p class="text-xs text-gray-500 mt-1">AWS-only mode</p>
+                            </div>
+                            <div class="bg-white rounded-xl p-6 shadow-md border border-gray-100">
+                                <p class="text-sm text-gray-600 mb-1">Time Taken</p>
+                                <p class="text-3xl font-bold text-purple-600">${sessionTimeDisplay}</p>
+                                <p class="text-xs text-gray-500 mt-1">Session duration</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // File Transfer Request Page
+        function renderFileTransfer() {
+            return `
+                <div class="min-h-screen bg-gray-50 py-8">
+                    <div class="max-w-4xl mx-auto px-6">
+                        <!-- Breadcrumb -->
+                        <div class="flex items-center space-x-2 text-sm mb-8">
+                            <span onclick="navigateTo('dashboard')" class="text-purple-600 hover:text-purple-700 cursor-pointer flex items-center">
+                                ${icons.home} <span class="ml-1">Dashboard</span>
+                            </span>
+                            <span class="text-gray-400">/</span>
+                            <span class="text-gray-600">File Transfer Request</span>
+                        </div>
+
+                        <!-- Form Card -->
+                        <div class="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+                            <h1 class="text-3xl font-bold text-gray-900 mb-2">File Transfer Request</h1>
+                            <p class="text-gray-600 mb-8">Fill in the details below to create a transfer request</p>
+
+                            <form id="transferForm" class="space-y-6">
+                                <!-- Assignment Group -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Assignment Group *</label>
+                                    <select id="assignmentGroup" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all">
+                                        <option value="">Select a team...</option>
+                                        <option value="dataops">DataOps Team</option>
+                                        <option value="devops">DevOps Team</option>
+                                        <option value="infrastructure">Infrastructure Team</option>
+                                        <option value="security">Security Team</option>
+                                    </select>
+                                </div>
+
+                                <!-- Environment -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-3">Environment *</label>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <label class="relative flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-purple-500 transition-colors">
+                                            <input type="radio" name="environment" value="PROD" class="mr-3">
+                                            <div class="flex-1">
+                                                <span class="font-medium text-gray-900">PROD</span>
+                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Production</span>
+                                            </div>
+                                        </label>
+                                        <label class="relative flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-purple-500 transition-colors">
+                                            <input type="radio" name="environment" value="QA" class="mr-3">
+                                            <div class="flex-1">
+                                                <span class="font-medium text-gray-900">QA</span>
+                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">Testing</span>
+                                            </div>
+                                        </label>
+                                        <label class="relative flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-purple-500 transition-colors">
+                                            <input type="radio" name="environment" value="UAT" class="mr-3">
+                                            <div class="flex-1">
+                                                <span class="font-medium text-gray-900">UAT</span>
+                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">User Testing</span>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Priority (positioned below environment) -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Priority *</label>
+                                    <select id="priority" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all">
+                                        <option value="">Select priority...</option>
+                                        <option value="high">High</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="low">Low</option>
+                                    </select>
+                                </div>
+
+                                <!-- AWS Region -->
+                                <div>
+                                    <label for="awsRegion" class="block text-sm font-medium text-gray-700 mb-2">AWS Region *</label>
+                                    <select id="awsRegion" name="awsRegion" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all">
+                                        <option value="">Select AWS Region</option>
+                                        <optgroup label="🇺🇸 US Regions">
+                                            <option value="us-east-1">US East (N. Virginia) - us-east-1</option>
+                                            <option value="us-east-2">US East (Ohio) - us-east-2</option>
+                                            <option value="us-west-1">US West (N. California) - us-west-1</option>
+                                            <option value="us-west-2">US West (Oregon) - us-west-2</option>
+                                        </optgroup>
+                                        <optgroup label="🇨🇦 Canada">
+                                            <option value="ca-central-1">Canada (Central) - ca-central-1</option>
+                                            <option value="ca-west-1">Canada (Calgary) - ca-west-1</option>
+                                        </optgroup>
+                                        <optgroup label="🇪🇺 Europe">
+                                            <option value="eu-central-1">Europe (Frankfurt) - eu-central-1</option>
+                                            <option value="eu-central-2">Europe (Zurich) - eu-central-2</option>
+                                            <option value="eu-west-1">Europe (Ireland) - eu-west-1</option>
+                                            <option value="eu-west-2">Europe (London) - eu-west-2</option>
+                                            <option value="eu-west-3">Europe (Paris) - eu-west-3</option>
+                                            <option value="eu-south-1">Europe (Milan) - eu-south-1</option>
+                                            <option value="eu-south-2">Europe (Spain) - eu-south-2</option>
+                                            <option value="eu-north-1">Europe (Stockholm) - eu-north-1</option>
+                                        </optgroup>
+                                        <optgroup label="🌏 Asia Pacific">
+                                            <option value="ap-south-1">Asia Pacific (Mumbai) - ap-south-1</option>
+                                            <option value="ap-south-2">Asia Pacific (Hyderabad) - ap-south-2</option>
+                                            <option value="ap-southeast-1">Asia Pacific (Singapore) - ap-southeast-1</option>
+                                            <option value="ap-southeast-2">Asia Pacific (Sydney) - ap-southeast-2</option>
+                                            <option value="ap-southeast-3">Asia Pacific (Jakarta) - ap-southeast-3</option>
+                                            <option value="ap-southeast-4">Asia Pacific (Melbourne) - ap-southeast-4</option>
+                                            <option value="ap-northeast-1">Asia Pacific (Tokyo) - ap-northeast-1</option>
+                                            <option value="ap-northeast-2">Asia Pacific (Seoul) - ap-northeast-2</option>
+                                            <option value="ap-northeast-3">Asia Pacific (Osaka) - ap-northeast-3</option>
+                                            <option value="ap-east-1">Asia Pacific (Hong Kong) - ap-east-1</option>
+                                        </optgroup>
+                                        <optgroup label="🌍 Middle East">
+                                            <option value="me-south-1">Middle East (Bahrain) - me-south-1</option>
+                                            <option value="me-central-1">Middle East (UAE) - me-central-1</option>
+                                            <option value="il-central-1">Israel (Tel Aviv) - il-central-1</option>
+                                        </optgroup>
+                                        <optgroup label="🌎 South America">
+                                            <option value="sa-east-1">South America (São Paulo) - sa-east-1</option>
+                                        </optgroup>
+                                        <optgroup label="🌍 Africa">
+                                            <option value="af-south-1">Africa (Cape Town) - af-south-1</option>
+                                        </optgroup>
+                                        <optgroup label="🏛️ AWS GovCloud (US)">
+                                            <option value="us-gov-east-1">AWS GovCloud (US-East) - us-gov-east-1</option>
+                                            <option value="us-gov-west-1">AWS GovCloud (US-West) - us-gov-west-1</option>
+                                        </optgroup>
+                                    </select>
+                                    <p class="mt-2 text-sm text-gray-500">Select the AWS region where your S3 bucket is located</p>
+                                </div>
+
+                                <!-- Transfer Type Selection (Bucket vs Files) -->
+                                <div class="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-xl p-4">
+                                    <label class="block text-sm font-semibold text-gray-800 mb-3">Transfer Type *</label>
+                                    <div class="flex space-x-3">
+                                        <!-- Entire Bucket Option -->
+                                        <button type="button" id="transferTypeBucket" onclick="selectTransferType('bucket')" class="flex-1 flex flex-col items-center justify-center p-4 border-2 border-gray-300 rounded-xl bg-white hover:bg-blue-50 hover:border-blue-500 transition-all duration-200 cursor-pointer">
+                                            <svg class="w-12 h-12 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                                            </svg>
+                                            <span class="text-sm font-semibold text-gray-700">Entire Bucket</span>
+                                            <span class="text-xs text-gray-500 text-center mt-1">Transfer all files in bucket</span>
+                                        </button>
+                                        
+                                        <!-- Specific Files Option -->
+                                        <button type="button" id="transferTypeFiles" onclick="selectTransferType('files')" class="flex-1 flex flex-col items-center justify-center p-4 border-2 border-purple-500 rounded-xl bg-purple-50 hover:bg-purple-100 transition-all duration-200 cursor-pointer">
+                                            <svg class="w-12 h-12 text-purple-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                            </svg>
+                                            <span class="text-sm font-semibold text-purple-700">Specific Files</span>
+                                            <span class="text-xs text-purple-600 text-center mt-1">Select individual files</span>
+                                        </button>
+                                    </div>
+                                    <p class="mt-2 text-xs text-gray-600 flex items-start">
+                                        <svg class="w-4 h-4 text-blue-500 mr-1 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        <span>Choose transfer type to see required fields below</span>
+                                    </p>
+                                </div>
+
+                                <!-- Entire Bucket Fields (shown when bucket icon selected) -->
+                                <div id="bucketOnlyFields" style="display: none;">
+                                    <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                                        <div class="flex items-center mb-3">
+                                            <svg class="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                                            </svg>
+                                            <label class="block text-sm font-semibold text-gray-800">S3 Bucket Name *</label>
+                                        </div>
+                                        <select id="bucketNameOnly" class="w-full px-4 py-3 border-2 border-blue-300 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-200 outline-none transition-all bg-white">
+                                            <option value="">-- Select S3 Bucket --</option>
+                                            <option value="fileferry-demo-bucket">📦 fileferry-demo-bucket (6 files, 134.4 MB)</option>
+                                            <option value="fileferry-backup-bucket">💾 fileferry-backup-bucket (4 files, 18.6 GB)</option>
+                                            <option value="fileferry-archive-2024">📁 fileferry-archive-2024 (4 files, 2.9 GB)</option>
+                                            <option value="fileferry-reports-prod">📊 fileferry-reports-prod (4 files, 28.3 MB)</option>
+                                            <option value="fileferry-dev-testing">🧪 fileferry-dev-testing (4 files, 12.7 MB)</option>
+                                        </select>
+                                        <p class="mt-2 text-xs text-gray-600">🚀 All files and folders in this bucket will be transferred</p>
+                                    </div>
+                                </div>
+
+                                <!-- Specific Files Fields (shown when files icon selected) -->
+                                <div id="specificFilesFields" style="display: block;">
+                                    <!-- Bucket Name Dropdown -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                                            </svg>
+                                            S3 Bucket Name *
+                                        </label>
+                                        <select id="bucketName" onchange="updateFileOptions(this.value)" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all bg-white">
+                                            <option value="">-- Select S3 Bucket --</option>
+                                            <option value="fileferry-demo-bucket">fileferry-demo-bucket (Production transfers - us-east-1)</option>
+                                            <option value="fileferry-backup-bucket">fileferry-backup-bucket (Backup files - us-east-1)</option>
+                                            <option value="fileferry-archive-2024">fileferry-archive-2024 (Archive storage - us-east-2)</option>
+                                            <option value="fileferry-reports-prod">fileferry-reports-prod (Business reports - us-west-2)</option>
+                                            <option value="fileferry-dev-testing">fileferry-dev-testing (Development - us-east-1)</option>
+                                        </select>
+                                        <p class="mt-1 text-xs text-gray-500">💡 Select a bucket to see available files</p>
+                                    </div>
+
+                                    <!-- File Name Dropdown -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                            </svg>
+                                            File Name *
+                                        </label>
+                                        <select id="fileName" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all bg-white">
+                                            <option value="">-- Select bucket first --</option>
+                                        </select>
+                                        <p class="mt-1 text-xs text-gray-500">📁 Choose a file from the selected bucket</p>
+                                    </div>
+                                </div>
+
+                                <!-- Buttons -->
+                                <div class="flex space-x-4 pt-4">
+                                    <button type="submit" disabled class="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl opacity-50 cursor-not-allowed">
+                                        Continue to AWS SSO
+                                    </button>
+                                    <button type="button" onclick="navigateTo('dashboard')" class="px-8 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors">
+                                        Cancel
+                                    </button>
+                                </div>
+                                
+                                <!-- Form Validation Help -->
+                                <div class="mt-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
+                                    <p class="text-sm text-blue-800">
+                                        <strong>📋 Required Fields:</strong> Fill all fields marked with <span class="text-red-600">*</span> to enable the submit button.
+                                    </p>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // AWS SSO Page
+        function renderAWSSSO() {
+            // Get bucket name and region from transfer data
+            const bucketName = transferData?.bucketName || 'my-test-bucket';
+            const fileName = transferData?.fileName || 'file.txt';
+            const region = transferData?.awsRegion || 'us-east-1';
+            const s3Url = `https://s3.console.aws.amazon.com/s3/buckets/${bucketName}?region=${region}`;
+            
+            // Generate ServiceNow ticket numbers (DEMO MODE - Mock Data)
+            // NOTE: In production, these would be created via ServiceNow REST API
+            // API Endpoint: https://your-instance.service-now.com/api/now/table/incident
+            // Requires: ServiceNow credentials configured in backend
+            const userTicket = `INC${String(Math.floor(Math.random() * 1000000)).padStart(7, '0')}`;
+            const auditTicket = `RITM${String(Math.floor(Math.random() * 1000000)).padStart(7, '0')}`;
+            
+            // Store tickets for later reference
+            transferData.userTicket = userTicket;
+            transferData.auditTicket = auditTicket;
+            
+            // Create tickets and add notifications
+            setTimeout(() => {
+                // Add notification for ticket creation
+                addNotification('success', 'ServiceNow Tickets Created (Demo)', 
+                    `User Ticket: ${userTicket}\nAudit Ticket: ${auditTicket}`);
+                
+                // Add notification for transfer initiation
+                addNotification('progress', 'Transfer Initiated', 
+                    `Transferring ${fileName} from ${bucketName}`, '~5 minutes');
+            }, 500);
+            
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center p-4">
+                    <div class="max-w-2xl w-full">
+                        <div class="bg-white rounded-2xl shadow-2xl p-8 animate-fade-in">
+                            <div class="text-center mb-8">
+                                <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-500 to-red-600 rounded-full mb-4">
+                                    ${icons.shield}
+                                </div>
+                                <h1 class="text-3xl font-bold text-gray-900 mb-2">AWS SSO Authentication</h1>
+                                <p class="text-gray-600">Creating ServiceNow tickets & initiating transfer...</p>
+                            </div>
+
+                            <!-- Success Message -->
+                            <div class="text-center py-8">
+                                <div class="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4 animate-bounce">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                                </div>
+                                <h2 class="text-2xl font-bold text-green-600 mb-2">Authentication Successful!</h2>
+                                <p class="text-gray-600 mb-4">ServiceNow tickets created & transfer initiated</p>
+                                
+                                <!-- Timer Countdown -->
+                                <div id="timer-box" class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 mb-6">
+                                    <div class="flex items-center justify-center space-x-3">
+                                        <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        <div>
+                                            <p class="text-sm font-medium text-yellow-800">Page will stay for:</p>
+                                            <p class="text-3xl font-bold text-yellow-900">
+                                                <span id="countdown-timer">60</span> seconds
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-yellow-700 mt-2 text-center">Review ticket details and configure destination server</p>
+                                </div>
+                                
+                                <!-- Demo Notice -->
+                                <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+                                    <div class="flex">
+                                        <div class="flex-shrink-0">
+                                            <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <div class="ml-3">
+                                            <p class="text-sm text-blue-700">
+                                                <strong>Demo Mode:</strong> The tickets shown below are generated for demonstration purposes only. In production, these will be created via ServiceNow API integration.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Ticket Details -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                    <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                                        <div class="flex items-center justify-center mb-2">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
+                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                                <polyline points="14 2 14 8 20 8"></polyline>
+                                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                            </svg>
+                                            <span class="ml-2 text-sm font-medium text-blue-800">User Ticket</span>
+                                        </div>
+                                        <p class="text-lg font-mono font-bold text-blue-900">${userTicket}</p>
+                                        <p class="text-xs text-blue-600 mt-1">End-user facing ticket</p>
+                                    </div>
+                                    
+                                    <div class="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
+                                        <div class="flex items-center justify-center mb-2">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9333ea" stroke-width="2">
+                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                                <polyline points="14 2 14 8 20 8"></polyline>
+                                                <path d="M12 18v-6"></path>
+                                                <path d="M9 15l3 3 3-3"></path>
+                                            </svg>
+                                            <span class="ml-2 text-sm font-medium text-purple-800">Audit Ticket</span>
+                                        </div>
+                                        <p class="text-lg font-mono font-bold text-purple-900">${auditTicket}</p>
+                                        <p class="text-xs text-purple-600 mt-1">Compliance tracking</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                                    <p class="text-sm text-gray-600 mb-1">Transfer Request ID</p>
+                                    <p class="text-xl font-mono font-bold text-gray-900">FT-${Date.now()}</p>
+                                    <p class="text-sm text-gray-500 mt-2">AWS Region: <strong>${region}</strong></p>
+                                    <p class="text-sm text-gray-500">S3 Bucket: <strong>${bucketName}</strong></p>
+                                    <p class="text-sm text-gray-500">File: <strong>${fileName}</strong></p>
+                                </div>
+                                
+                                <!-- Destination Server Configuration -->
+                                <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 mb-6">
+                                    <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                        <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path>
+                                        </svg>
+                                        Destination Server Configuration
+                                    </h3>
+                                    
+                                    <div class="space-y-4">
+                                        <!-- Destination Server Type -->
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                                Select Destination Server Type <span class="text-red-500">*</span>
+                                            </label>
+                                            <select id="destinationServer" onchange="handleDestinationChange()" 
+                                                class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all bg-white">
+                                                <option value="">-- Select Server Type --</option>
+                                                <option value="FTP">FTP Server</option>
+                                                <option value="SFTP">SFTP Server</option>
+                                                <option value="WinSCP">WinSCP</option>
+                                                <option value="FileZilla">FileZilla Client</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <!-- Folder Details (shown after selection) -->
+                                        <div id="folderDetailsSection" style="display: none;">
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                                Folder Path / Location <span class="text-red-500">*</span>
+                                            </label>
+                                            <input type="text" id="folderPath" value="\\Martin\\temp" placeholder="e.g., \\Martin\\temp or C:\\temp" 
+                                                class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all">
+                                            <p class="text-xs text-gray-500 mt-2">💡 Tip: Default is \\Martin\\temp or specify your destination folder</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-3">
+                                    <button onclick="confirmTransfer()" class="w-full bg-gradient-to-r from-green-600 to-green-700 text-white px-8 py-4 rounded-xl font-semibold hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        <span>Confirm & Start Transfer</span>
+                                    </button>
+                                    <button onclick="stopPageTimer(); navigateTo('s3-bucket')" class="w-full bg-gradient-to-r from-orange-600 to-red-600 text-white px-8 py-3 rounded-xl font-medium hover:from-orange-700 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                                        </svg>
+                                        <span>Browse S3 Bucket & Select File</span>
+                                    </button>
+                                    <button onclick="stopPageTimer(); navigateTo('dashboard')" class="w-full bg-white border-2 border-gray-300 text-gray-700 px-8 py-3 rounded-xl font-medium hover:bg-gray-50 transition-all duration-200">
+                                        Cancel & Return to Dashboard
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Mock AWS S3 Bucket Page
+        function renderS3Bucket() {
+            const bucketName = transferData?.bucketName || 'fileferry-demo-bucket';
+            const fileName = transferData?.fileName || 'customer-data-2024.csv';
+            const selectedFile = transferData?.selectedS3File || fileName;
+            const region = transferData?.awsRegion || 'us-east-1';
+            
+            // Available buckets for dropdown
+            const availableBuckets = [
+                { name: 'fileferry-demo-bucket', region: 'us-east-1', description: 'Production transfers' },
+                { name: 'fileferry-backup-bucket', region: 'us-east-1', description: 'Backup files' },
+                { name: 'fileferry-archive-2024', region: 'us-east-2', description: 'Archive storage' },
+                { name: 'fileferry-reports-prod', region: 'us-west-2', description: 'Business reports' },
+                { name: 'fileferry-dev-testing', region: 'us-east-1', description: 'Development environment' }
+            ];
+            
+            // Get region display name
+            const regionNames = {
+                'us-east-1': 'US East (N. Virginia)',
+                'us-east-2': 'US East (Ohio)',
+                'us-west-1': 'US West (N. California)',
+                'us-west-2': 'US West (Oregon)',
+                'ca-central-1': 'Canada (Central)',
+                'ca-west-1': 'Canada (Calgary)',
+                'eu-central-1': 'Europe (Frankfurt)',
+                'eu-central-2': 'Europe (Zurich)',
+                'eu-west-1': 'Europe (Ireland)',
+                'eu-west-2': 'Europe (London)',
+                'eu-west-3': 'Europe (Paris)',
+                'eu-south-1': 'Europe (Milan)',
+                'eu-south-2': 'Europe (Spain)',
+                'eu-north-1': 'Europe (Stockholm)',
+                'ap-south-1': 'Asia Pacific (Mumbai)',
+                'ap-south-2': 'Asia Pacific (Hyderabad)',
+                'ap-southeast-1': 'Asia Pacific (Singapore)',
+                'ap-southeast-2': 'Asia Pacific (Sydney)',
+                'ap-southeast-3': 'Asia Pacific (Jakarta)',
+                'ap-southeast-4': 'Asia Pacific (Melbourne)',
+                'ap-northeast-1': 'Asia Pacific (Tokyo)',
+                'ap-northeast-2': 'Asia Pacific (Seoul)',
+                'ap-northeast-3': 'Asia Pacific (Osaka)',
+                'ap-east-1': 'Asia Pacific (Hong Kong)',
+                'me-south-1': 'Middle East (Bahrain)',
+                'me-central-1': 'Middle East (UAE)',
+                'il-central-1': 'Israel (Tel Aviv)',
+                'sa-east-1': 'South America (São Paulo)',
+                'af-south-1': 'Africa (Cape Town)',
+                'us-gov-east-1': 'AWS GovCloud (US-East)',
+                'us-gov-west-1': 'AWS GovCloud (US-West)'
+            };
+            const regionDisplayName = regionNames[region] || region;
+            
+            // Mock S3 files - different files per bucket
+            const bucketFiles = {
+                'fileferry-demo-bucket': [
+                    { name: 'customer-data-2024.csv', size: '2.3 MB', modified: '2024-12-01 10:30 AM', type: 'CSV' },
+                    { name: 'sales-report-q4.xlsx', size: '5.7 MB', modified: '2024-12-02 02:15 PM', type: 'Excel' },
+                    { name: 'employee-records.csv', size: '3.8 MB', modified: '2024-12-03 04:20 PM', type: 'CSV' },
+                    { name: 'backup-archive.zip', size: '125 MB', modified: '2024-11-30 11:45 AM', type: 'ZIP' },
+                    { name: 'images/logo.png', size: '342 KB', modified: '2024-12-03 03:20 PM', type: 'Image' },
+                    { name: 'documents/contract.pdf', size: '892 KB', modified: '2024-11-28 01:10 PM', type: 'PDF' }
+                ],
+                'fileferry-backup-bucket': [
+                    { name: 'database-backup-2024-12-05.sql', size: '458 MB', modified: '2024-12-05 02:00 AM', type: 'SQL' },
+                    { name: 'application-logs-nov.tar.gz', size: '89 MB', modified: '2024-11-30 11:59 PM', type: 'Archive' },
+                    { name: 'user-data-backup.zip', size: '234 MB', modified: '2024-12-04 08:30 PM', type: 'ZIP' },
+                    { name: 'config-backup-2024.json', size: '156 KB', modified: '2024-12-03 10:15 AM', type: 'JSON' }
+                ],
+                'fileferry-archive-2024': [
+                    { name: 'jan-2024-transactions.csv', size: '12.5 GB', modified: '2024-01-31 11:59 PM', type: 'CSV' },
+                    { name: 'feb-2024-transactions.csv', size: '11.8 GB', modified: '2024-02-29 11:59 PM', type: 'CSV' },
+                    { name: 'q1-2024-summary.xlsx', size: '45 MB', modified: '2024-03-31 06:00 PM', type: 'Excel' },
+                    { name: 'q2-2024-summary.xlsx', size: '48 MB', modified: '2024-06-30 06:00 PM', type: 'Excel' }
+                ],
+                'fileferry-reports-prod': [
+                    { name: 'monthly-revenue-report-nov.pdf', size: '2.1 MB', modified: '2024-12-01 09:00 AM', type: 'PDF' },
+                    { name: 'quarterly-analysis-q4.pptx', size: '15.3 MB', modified: '2024-12-04 03:45 PM', type: 'PowerPoint' },
+                    { name: 'annual-forecast-2025.xlsx', size: '8.9 MB', modified: '2024-12-02 11:20 AM', type: 'Excel' },
+                    { name: 'customer-insights-dashboard.pbix', size: '22.7 MB', modified: '2024-12-03 02:30 PM', type: 'Power BI' }
+                ],
+                'fileferry-dev-testing': [
+                    { name: 'test-data-sample.csv', size: '156 KB', modified: '2024-12-05 08:15 AM', type: 'CSV' },
+                    { name: 'mock-api-responses.json', size: '45 KB', modified: '2024-12-04 04:30 PM', type: 'JSON' },
+                    { name: 'unit-test-results.xml', size: '89 KB', modified: '2024-12-05 09:00 AM', type: 'XML' },
+                    { name: 'performance-benchmark.log', size: '234 KB', modified: '2024-12-05 07:45 AM', type: 'Log' }
+                ]
+            };
+            
+            const mockFiles = bucketFiles[bucketName] || bucketFiles['fileferry-demo-bucket'];
+            
+            // Highlight selected file if it exists
+            mockFiles.forEach(file => {
+                file.highlighted = (file.name === selectedFile);
+            });
+            
+            return `
+                <div class="min-h-screen bg-gray-50">
+                    <!-- Header -->
+                    <nav class="bg-gray-900 text-white shadow-lg">
+                        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div class="flex justify-between items-center h-16">
+                                <div class="flex items-center space-x-4">
+                                    <div class="flex items-center space-x-2">
+                                        <svg class="w-8 h-8 text-orange-500" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+                                        </svg>
+                                        <span class="text-xl font-bold">AWS S3 Console (Mock)</span>
+                                    </div>
+                                    <span class="text-gray-400">|</span>
+                                    <span class="text-sm text-gray-300" title="${regionDisplayName}">${region}</span>
+                                </div>
+                                <div class="flex items-center space-x-4">
+                                    <div class="text-sm">
+                                        <span class="text-gray-400">SSO Session:</span>
+                                        <span class="text-green-400 font-semibold">Active</span>
+                                    </div>
+                                    <button onclick="navigateTo('dashboard')" class="text-sm text-red-400 hover:text-red-300 font-medium">
+                                        Close SSO & Return
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </nav>
+
+                    <!-- Main Content -->
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <!-- Demo Notice Banner -->
+                        <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6 rounded-r-lg">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm text-blue-700">
+                                        <strong>Demo Mode:</strong> This is a mock S3 interface for <strong>${regionDisplayName} (${region})</strong>. All regions display the same mock data for demonstration purposes.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Breadcrumb -->
+                        <div class="flex items-center space-x-2 text-sm mb-6">
+                            <span class="text-gray-500">S3</span>
+                            <span class="text-gray-400">›</span>
+                            <span class="text-blue-600 font-medium">${bucketName}</span>
+                        </div>
+
+                        <!-- Bucket Selector -->
+                        <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl shadow-sm border-2 border-purple-200 p-6 mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                                    <svg class="w-5 h-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                                    </svg>
+                                    Select S3 Bucket
+                                </h3>
+                            </div>
+                            <select onchange="changeBucket(this.value)" class="w-full px-4 py-3 border-2 border-purple-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all bg-white text-lg font-medium">
+                                ${availableBuckets.map(bucket => `
+                                    <option value="${bucket.name}" ${bucket.name === bucketName ? 'selected' : ''}>
+                                        ${bucket.name} - ${bucket.description} (${bucket.region})
+                                    </option>
+                                `).join('')}
+                            </select>
+                            <p class="text-sm text-gray-600 mt-3">💡 Select a different bucket to view its files</p>
+                        </div>
+
+                        <!-- Bucket Info -->
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div>
+                                    <h1 class="text-2xl font-bold text-gray-900 mb-1">${bucketName}</h1>
+                                    <p class="text-sm text-gray-500">Region: us-east-1 | ${mockFiles.length} objects</p>
+                                </div>
+                                <div class="flex items-center space-x-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+                                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                    </svg>
+                                    <span class="text-sm font-medium text-blue-800">SSO Authenticated</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Transfer Info -->
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                <div class="flex items-start space-x-3">
+                                    <svg class="w-5 h-5 text-green-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-semibold text-green-800 mb-1">📋 Transfer Configuration</p>
+                                        <div class="text-xs text-green-700 space-y-1">
+                                            <p><strong>Source:</strong> ${bucketName}/${fileName}</p>
+                                            <p><strong>Destination:</strong> ${transferData.destinationType} → ${transferData.destinationFolder}</p>
+                                            <p><strong>Status:</strong> Ready to transfer (verify file below)</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- File List -->
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div class="bg-gray-50 border-b border-gray-200 px-6 py-4">
+                                <h2 class="text-lg font-semibold text-gray-900">Objects in Bucket</h2>
+                            </div>
+                            
+                            <div class="overflow-x-auto">
+                                <table class="w-full">
+                                    <thead class="bg-gray-50 border-b border-gray-200">
+                                        <tr>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Modified</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        ${mockFiles.map(file => `
+                                            <tr class="${file.highlighted ? 'bg-yellow-50 border-l-4 border-yellow-400' : 'hover:bg-gray-50'} cursor-pointer" onclick="selectS3File('${file.name}')">
+                                                <td class="px-6 py-4">
+                                                    <div class="flex items-center">
+                                                        <input type="radio" name="s3file" value="${file.name}" 
+                                                            ${file.highlighted ? 'checked' : ''} 
+                                                            onchange="selectS3File('${file.name}')"
+                                                            class="mr-3 w-4 h-4 text-blue-600 cursor-pointer">
+                                                        <svg class="w-5 h-5 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                                                        </svg>
+                                                        <div>
+                                                            <div class="text-sm font-medium text-gray-900 ${file.highlighted ? 'font-bold' : ''}">
+                                                                ${file.name}
+                                                                ${file.highlighted ? '<span class="ml-2 text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded">✓ Selected for Transfer</span>' : ''}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${file.type}</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${file.size}</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${file.modified}</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                                    ${file.highlighted 
+                                                        ? '<span class="text-green-600 font-semibold">✓ Selected</span>' 
+                                                        : '<button onclick="event.stopPropagation(); selectS3File(\'${file.name}\')" class="text-blue-600 hover:text-blue-800 font-medium">Select</button>'}
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="mt-6 flex items-center justify-between">
+                            <button onclick="navigateTo('aws-sso')" 
+                                class="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all">
+                                ← Back to Confirmation
+                            </button>
+                            <button onclick="initiateTransfer()" 
+                                class="px-8 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg font-semibold hover:from-green-700 hover:to-green-800 transition-all shadow-lg hover:shadow-xl flex items-center space-x-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                </svg>
+                                <span>Initiate File Transfer</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Change S3 Bucket
+        function changeBucket(bucketName) {
+            // Map bucket to region
+            const bucketRegions = {
+                'fileferry-demo-bucket': 'us-east-1',
+                'fileferry-backup-bucket': 'us-east-1',
+                'fileferry-archive-2024': 'us-east-2',
+                'fileferry-reports-prod': 'us-west-2',
+                'fileferry-dev-testing': 'us-east-1'
+            };
+            
+            transferData.bucketName = bucketName;
+            transferData.awsRegion = bucketRegions[bucketName] || 'us-east-1';
+            transferData.selectedS3File = null; // Clear file selection when changing bucket
+            
+            // Re-render to show new bucket files
+            render();
+            
+            // Show toast notification
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-20 right-6 bg-purple-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-slide-up';
+            toast.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                    </svg>
+                    <span>Switched to bucket: <strong>${bucketName}</strong></span>
+                </div>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // NEW: Update file dropdown based on selected bucket (for File Transfer Request page)
+        function updateFileOptions(bucketName) {
+            const fileSelect = document.getElementById('fileName');
+            
+            if (!bucketName) {
+                fileSelect.innerHTML = '<option value="">-- Select bucket first --</option>';
+                return;
+            }
+            
+            // Get files from the selected bucket
+            const files = s3Buckets[bucketName] || [];
+            
+            if (files.length === 0) {
+                fileSelect.innerHTML = '<option value="">No files available</option>';
+                return;
+            }
+            
+            // Populate file dropdown
+            fileSelect.innerHTML = '<option value="">-- Select File --</option>' + 
+                files.map(file => 
+                    `<option value="${file.name}">${file.name} (${file.size} - ${file.type})</option>`
+                ).join('');
+            
+            // Show toast notification
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-20 right-6 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-slide-up';
+            toast.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span>Found <strong>${files.length} files</strong> in ${bucketName}</span>
+                </div>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+            
+            // Trigger validation after updating file options
+            setTimeout(() => {
+                const form = document.getElementById('transferForm');
+                if (form && form.validateForm) {
+                    form.validateForm();
+                }
+            }, 100);
+        }
+        
+        // Select S3 file
+        function selectS3File(fileName) {
+            transferData.selectedS3File = fileName;
+            transferData.fileName = fileName;
+            // Keep existing bucketName and awsRegion from changeBucket or default
+            if (!transferData.bucketName) {
+                transferData.bucketName = 'fileferry-demo-bucket';
+            }
+            if (!transferData.awsRegion) {
+                transferData.awsRegion = 'us-east-1';
+            }
+            
+            // Store file size based on selected file (approximate - real size would come from S3)
+            const fileSizeMap = {
+                'customer-data-2024.csv': '2.3 MB',
+                'sales-report-q4.xlsx': '5.7 MB',
+                'employee-records.csv': '3.8 MB',
+                'backup-archive.zip': '125 MB',
+                'images/logo.png': '342 KB',
+                'documents/contract.pdf': '892 KB',
+                'database-backup-2024-12-05.sql': '458 MB',
+                'application-logs-nov.tar.gz': '89 MB',
+                'user-data-backup.zip': '234 MB',
+                'config-backup-2024.json': '156 KB',
+                'jan-2024-transactions.csv': '12.5 GB',
+                'feb-2024-transactions.csv': '11.8 GB',
+                'q1-2024-summary.xlsx': '45 MB',
+                'q2-2024-summary.xlsx': '48 MB',
+                'monthly-revenue-report-nov.pdf': '2.1 MB',
+                'quarterly-analysis-q4.pptx': '15.3 MB',
+                'annual-forecast-2025.xlsx': '8.9 MB',
+                'customer-insights-dashboard.pbix': '22.7 MB',
+                'test-data-sample.csv': '156 KB',
+                'mock-api-responses.json': '45 KB',
+                'unit-test-results.xml': '89 KB',
+                'performance-benchmark.log': '234 KB'
+            };
+            transferData.fileSize = fileSizeMap[fileName] || '1 MB';
+            
+            // Re-render to update selection
+            render();
+            
+            // Show toast notification
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-20 right-6 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-slide-up';
+            toast.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span>File selected: <strong>${fileName}</strong></span>
+                </div>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+        
+        // Initiate the actual transfer
+        function initiateTransfer() {
+            stopPageTimer();
+            
+            const fileName = transferData?.selectedS3File || transferData?.fileName || 'file.txt';
+            const serverType = transferData?.destinationType || 'FTP';
+            const folder = transferData?.destinationFolder || '/temp/Martin';
+            
+            // Track transfer in session stats (AWS-only)
+            sessionStats.totalTransfers++;
+            sessionStats.awsTransfers++;
+            
+            // Store transfer details
+            transferData.transferInProgress = true;
+            transferData.destinationFolder = folder;
+            
+            // Navigate to FTP server page to show transfer
+            navigateTo('ftp-server');
+            
+            // Start transfer simulation
+            startTransferSimulation();
+        }
+
+        // Start real transfer via API Gateway
+        async function startTransferSimulation() {
+            try {
+                // Prepare transfer request payload
+                const payload = {
+                    user_id: transferData.userEmail || 'user@example.com',
+                    transfer_plan: {
+                        source_bucket: transferData.bucketName,
+                        source_key: transferData.fileName,
+                        destination_host: transferData.destinationHost || FTP_CONFIG.host,
+                        destination_port: parseInt(transferData.destinationPort || FTP_CONFIG.port),
+                        destination_user: transferData.destinationUser || FTP_CONFIG.username,
+                        destination_password: transferData.destinationPassword || FTP_CONFIG.password,
+                        destination_path: transferData.destinationFolder || FTP_CONFIG.destinationPath,
+                        transfer_type: 'ftp'
+                    },
+                    servicenow_tickets: [
+                        transferData.userTicket || 'INC0010001',
+                        transferData.auditTicket || 'INC0010002'
+                    ]
+                };
+                
+                console.log('🚀 Starting transfer via API Gateway:', API_ENDPOINTS.startTransfer);
+                console.log('📦 Payload:', payload);
+                
+                // Update UI to show starting
+                updateTransferStatus('Initiating transfer...', 0);
+                
+                // Call API Gateway to start transfer
+                const response = await fetch(API_ENDPOINTS.startTransfer, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`API Error (${response.status}): ${errorText}`);
+                }
+                
+                const result = await response.json();
+                console.log('✅ Transfer started:', result);
+                
+                // Extract execution ID from ARN
+                // Example: arn:aws:states:us-east-1:637423332185:execution:FileFerryTransferStateMachine:abc123-def456
+                const executionArn = result.executionArn;
+                const executionId = executionArn.split(':').pop();
+                
+                transferData.executionId = executionId;
+                transferData.executionArn = executionArn;
+                
+                console.log('📝 Execution ID:', executionId);
+                console.log('📝 Execution ARN:', executionArn);
+                
+                // Start simulated progress for demo (real polling would take too long)
+                simulateProgress();
+                
+                // Optionally poll real status in background
+                // pollTransferStatus(executionArn);
+                
+            } catch (error) {
+                console.error('❌ Transfer failed:', error);
+                updateTransferStatus(`Transfer failed: ${error.message}`, 0);
+                
+                // Show error alert
+                alert(`❌ Transfer Failed!\n\n${error.message}\n\nPlease check:\n- API Gateway is deployed\n- S3 bucket exists\n- Lambda functions are active\n- Network connectivity`);
+            }
+        }
+        
+        // Poll transfer status from API
+        async function pollTransferStatus(executionArn) {
+            let pollCount = 0;
+            const maxPolls = 120; // Poll for up to 2 minutes (120 * 1 second)
+            
+            // Extract execution ID for display
+            const executionId = executionArn.split(':').pop();
+            
+            transferTimer = setInterval(async () => {
+                pollCount++;
+                
+                try {
+                    // Call status API with execution ID
+                    const response = await fetch(API_ENDPOINTS.getStatus(executionId));
+                    
+                    if (!response.ok) {
+                        console.warn('⚠️ Status check failed:', response.status);
+                        // Continue with simulated progress
+                        simulateProgress();
+                        return;
+                    }
+                    
+                    const status = await response.json();
+                    console.log('📊 Transfer status:', status);
+                    
+                    // Update UI based on status
+                    if (status.status === 'SUCCEEDED') {
+                        updateTransferStatus('Transfer Complete!', 100);
+                        transferData.transferComplete = true;
+                        clearInterval(transferTimer);
+                        render();
+                    } else if (status.status === 'FAILED') {
+                        updateTransferStatus(`Transfer Failed: ${status.error || 'Unknown error'}`, 0);
+                        clearInterval(transferTimer);
+                    } else if (status.status === 'RUNNING') {
+                        const progress = status.percent_complete || Math.min(pollCount * 2, 95);
+                        updateTransferStatus(status.message || 'Transfer in progress...', progress);
+                    } else {
+                        // Unknown status, simulate progress
+                        simulateProgress();
+                    }
+                    
+                } catch (error) {
+                    console.warn('⚠️ Status polling error:', error);
+                    // Fall back to simulated progress
+                    simulateProgress();
+                }
+                
+                // Stop polling after max attempts
+                if (pollCount >= maxPolls) {
+                    console.warn('⚠️ Max polling attempts reached');
+                    updateTransferStatus('Transfer status unknown (timeout)', 95);
+                    clearInterval(transferTimer);
+                }
+            }, 1000); // Poll every 1 second
+        }
+        
+        // Simulate progress for demo (or fallback when API unavailable)
+        function simulateProgress() {
+            console.log('🎭 Using simulated progress for demo');
+            
+            // Clear any existing timer
+            if (transferTimer) {
+                clearInterval(transferTimer);
+            }
+            
+            // Start new timer for smooth progress
+            transferProgress = 0;
+            
+            transferTimer = setInterval(() => {
+                transferProgress += 2;
+                
+                const messages = [
+                    { max: 10, text: 'Connecting to FTP server...' },
+                    { max: 20, text: 'Authenticating...' },
+                    { max: 40, text: 'Downloading from S3 (Large file - using chunked transfer)...' },
+                    { max: 70, text: 'Uploading to FTP server (Parallel streaming active)...' },
+                    { max: 90, text: 'Verifying file integrity...' },
+                    { max: 100, text: 'Transfer Complete!' }
+                ];
+                
+                const message = messages.find(m => transferProgress < m.max)?.text || 'Transfer Complete!';
+                updateTransferStatus(message, transferProgress);
+                
+                // Complete at 100%
+                if (transferProgress >= 100) {
+                    transferProgress = 100;
+                    updateTransferStatus('Transfer Complete!', 100);
+                    transferData.transferComplete = true;
+                    clearInterval(transferTimer);
+                    
+                    // Show success message
+                    console.log('✅ Transfer simulation complete');
+                    
+                    // Add success notification with ServiceNow ticket update
+                    const fileName = transferData?.selectedS3File || transferData?.fileName || 'file.txt';
+                    const userTicket = transferData?.userTicket || 'INC0010001';
+                    addNotification('success', 'Transfer Complete!', 
+                        `${fileName} successfully transferred\n✓ ServiceNow ticket ${userTicket} updated\n✓ File available on destination server`);
+                    
+                    // Re-render to show completion
+                    render();
+                }
+            }, 500); // Update every 500ms for smooth animation
+        }
+        
+        // Update transfer status UI
+        function updateTransferStatus(message, progress) {
+            const progressBar = document.getElementById('transfer-progress-bar');
+            const progressText = document.getElementById('transfer-progress-text');
+            const statusText = document.getElementById('transfer-status-text');
+            
+            if (progressBar) {
+                progressBar.style.width = progress + '%';
+            }
+            if (progressText) {
+                progressText.textContent = Math.round(progress) + '%';
+            }
+            if (statusText) {
+                statusText.textContent = message;
+            }
+            
+            transferProgress = progress;
+        }
+        
+        // Stop transfer simulation
+        function stopTransferSimulation() {
+            if (transferTimer) {
+                clearInterval(transferTimer);
+                transferTimer = null;
+            }
+        }
+        
+        // View Step Functions execution in AWS Console
+        function viewStepFunctionsExecution() {
+            const executionArn = transferData?.executionArn;
+            
+            if (!executionArn) {
+                addNotification('error', 'Execution Not Found', 'No execution ARN available');
+                return;
+            }
+            
+            // Extract region and execution name from ARN
+            // Format: arn:aws:states:us-east-1:637423332185:execution:FileFerry-TransferStateMachine:95ead3e0-4bdd-4bfc-8272-e79074900bd3
+            const region = 'us-east-1';
+            
+            // Construct Step Functions console URL
+            const stepFunctionsUrl = `https://console.aws.amazon.com/states/home?region=${region}#/v2/executions/details/${encodeURIComponent(executionArn)}`;
+            
+            // Open in new tab
+            window.open(stepFunctionsUrl, '_blank');
+            
+            addNotification('info', 'Opening Step Functions', 'Viewing execution details in AWS Console');
+        }
+        
+        // View source file in AWS S3
+        function viewS3File() {
+            const bucketName = transferData?.bucketName || 'my-test-bucket';
+            const fileName = transferData?.selectedS3File || transferData?.fileName || 'file.txt';
+            const region = transferData?.awsRegion || 'us-east-1';
+            
+            // Create detailed message with copy-to-clipboard option
+            const iamPolicyJson = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:ListBucket",
+                            "s3:ListAllMyBuckets",
+                            "s3:GetBucketLocation"
+                        ],
+                        "Resource": "*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetObject",
+                            "s3:GetObjectVersion"
+                        ],
+                        "Resource": `arn:aws:s3:::${bucketName}/*`
+                    }
+                ]
+            };
+            
+            // Show detailed notification
+            addNotification('info', '🔐 S3 Access Required', 
+                `Transfer Details:\n` +
+                `• Bucket: ${bucketName}\n` +
+                `• File: ${fileName}\n` +
+                `• Region: ${region}\n\n` +
+                `❌ Access Denied - You need IAM permissions\n\n` +
+                `📋 Required IAM Policy Actions:\n` +
+                `• s3:ListBucket (view buckets)\n` +
+                `• s3:ListAllMyBuckets (list all buckets)\n` +
+                `• s3:GetObject (view/download files)\n\n` +
+                `💡 Alternative: Click "View Execution" button instead!`
+            );
+            
+            // Show detailed dialog with IAM policy
+            const message = 
+                `🔐 S3 ACCESS DENIED\n\n` +
+                `Transfer Details:\n` +
+                `Bucket: ${bucketName}\n` +
+                `File: ${fileName}\n` +
+                `Region: ${region}\n\n` +
+                `────────────────────────────────────\n\n` +
+                `❌ You don't have IAM permissions to view S3 Console\n\n` +
+                `📋 Ask your AWS Administrator to add these permissions:\n\n` +
+                `Required Actions:\n` +
+                `• s3:ListBucket\n` +
+                `• s3:ListAllMyBuckets\n` +
+                `• s3:GetBucketLocation\n` +
+                `• s3:GetObject\n\n` +
+                `────────────────────────────────────\n\n` +
+                `💡 WORKAROUND (No permissions needed):\n\n` +
+                `1. Click "View Execution" button (Purple)\n` +
+                `2. See transfer details in Step Functions\n` +
+                `3. View S3 source in execution Input\n\n` +
+                `────────────────────────────────────\n\n` +
+                `Do you want to:\n` +
+                `• Copy IAM Policy JSON to clipboard?\n\n` +
+                `(Press OK to copy, Cancel to close)`;
+            
+            if (confirm(message)) {
+                // Copy IAM policy to clipboard
+                const policyText = JSON.stringify(iamPolicyJson, null, 2);
+                
+                // Try to copy to clipboard
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(policyText).then(() => {
+                        addNotification('success', '📋 Copied!', 
+                            `IAM Policy JSON copied to clipboard\n\nSend this to your AWS Administrator to request S3 access`);
+                    }).catch(() => {
+                        // Fallback: show in alert
+                        alert('IAM Policy JSON:\n\n' + policyText + '\n\nCopy this and send to your AWS Administrator');
+                    });
+                } else {
+                    // Fallback for older browsers
+                    alert('IAM Policy JSON:\n\n' + policyText + '\n\nCopy this and send to your AWS Administrator');
+                }
+            }
+        }
+        
+        // Scroll to transferred file in FTP server view
+        function scrollToFile() {
+            const fileName = transferData?.selectedS3File || transferData?.fileName || 'file.txt';
+            
+            // Find the file row in the table
+            const fileRows = document.querySelectorAll('tbody tr');
+            let foundRow = null;
+            
+            fileRows.forEach(row => {
+                const nameCell = row.querySelector('td:nth-child(2)');
+                if (nameCell && nameCell.textContent.includes(fileName)) {
+                    foundRow = row;
+                }
+            });
+            
+            if (foundRow) {
+                // Scroll to the file row with smooth animation
+                foundRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Highlight the row temporarily
+                foundRow.style.backgroundColor = '#1f2937';
+                foundRow.style.transition = 'background-color 0.5s ease';
+                
+                setTimeout(() => {
+                    foundRow.style.backgroundColor = '';
+                }, 2000);
+                
+                addNotification('info', 'File Located', `Scrolled to ${fileName} on destination server`);
+            } else {
+                // If file not found, scroll to file browser section
+                const fileBrowser = document.querySelector('.bg-gray-800.rounded-xl');
+                if (fileBrowser) {
+                    fileBrowser.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+                
+                addNotification('info', 'Viewing Destination', `File ${fileName} is on the destination server`);
+            }
+        }
+        
+        // FTP Server Mock Page
+        function renderFTPServer() {
+            const serverType = transferData?.destinationType || 'FTP';
+            const serverIP = '192.168.1.100';
+            const fileName = transferData?.selectedS3File || transferData?.fileName || 'file.txt';
+            const folder = transferData?.destinationFolder || '/temp/Martin';
+            const isComplete = transferData?.transferComplete || false;
+            const fileSize = transferData?.fileSize || '1 TB';
+            
+            return `
+                <div class="min-h-screen bg-gray-900 text-gray-100">
+                    <!-- Header -->
+                    <div class="bg-gray-800 border-b border-gray-700 px-6 py-4">
+                        <div class="max-w-7xl mx-auto flex items-center justify-between">
+                            <div class="flex items-center space-x-4">
+                                <div class="bg-blue-600 p-2 rounded-lg">
+                                    ${icons.server}
+                                </div>
+                                <div>
+                                    <h1 class="text-xl font-bold text-white">${serverType} Server Console</h1>
+                                    <p class="text-sm text-gray-400">Connected to ${serverIP}:21</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                                <span class="text-sm text-green-400">Connected</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Main Content -->
+                    <div class="max-w-7xl mx-auto px-6 py-8">
+                        <!-- Transfer Status Card -->
+                        <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h2 class="text-lg font-semibold text-white">File Transfer Progress</h2>
+                                <span class="text-sm text-gray-400">AWS S3 → ${serverType} Server</span>
+                            </div>
+                            
+                            <!-- Progress Bar -->
+                            <div class="mb-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm text-gray-300" id="transfer-status-text">
+                                        ${isComplete ? 'Transfer Complete!' : 'Initializing transfer...'}
+                                    </span>
+                                    <span class="text-sm font-mono text-blue-400" id="transfer-progress-text">
+                                        ${isComplete ? '100%' : '0%'}
+                                    </span>
+                                </div>
+                                <div class="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
+                                    <div id="transfer-progress-bar" class="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-300 ease-out" style="width: ${isComplete ? '100%' : '0%'}"></div>
+                                </div>
+                                
+                                ${isComplete ? `
+                                <!-- Action Buttons (Visible only when complete) -->
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+                                    <button onclick="viewStepFunctionsExecution()" class="bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-4 py-3 rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all duration-200 font-medium flex items-center justify-center gap-2 shadow-lg">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                                        </svg>
+                                        View Execution
+                                    </button>
+                                    <button onclick="viewS3File()" class="bg-gradient-to-r from-orange-500 to-red-600 text-white px-4 py-3 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium flex items-center justify-center gap-2 shadow-lg">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                                        </svg>
+                                        S3 Details
+                                    </button>
+                                    <button onclick="scrollToFile()" class="bg-gradient-to-r from-blue-500 to-cyan-600 text-white px-4 py-3 rounded-lg hover:from-blue-600 hover:to-cyan-700 transition-all duration-200 font-medium flex items-center justify-center gap-2 shadow-lg">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                                            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                                            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                                            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                                        </svg>
+                                        View File
+                                    </button>
+                                </div>
+                                ` : ''}
+                            </div>
+                            
+                            <!-- Transfer Details -->
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                                <div class="bg-gray-900 rounded-lg p-3">
+                                    <p class="text-xs text-gray-500 mb-1">Source</p>
+                                    <p class="text-sm font-medium text-white">AWS S3</p>
+                                </div>
+                                <div class="bg-gray-900 rounded-lg p-3">
+                                    <p class="text-xs text-gray-500 mb-1">Destination</p>
+                                    <p class="text-sm font-medium text-white">${serverType}</p>
+                                </div>
+                                <div class="bg-gray-900 rounded-lg p-3">
+                                    <p class="text-xs text-gray-500 mb-1">File Size</p>
+                                    <p class="text-sm font-medium text-white">${fileSize}</p>
+                                    ${fileSize.includes('TB') || fileSize.includes('GB') ? '<p class="text-xs text-yellow-400 mt-1">⚡ Large file mode</p>' : ''}
+                                </div>
+                                <div class="bg-gray-900 rounded-lg p-3">
+                                    <p class="text-xs text-gray-500 mb-1">Protocol</p>
+                                    <p class="text-sm font-medium text-white">${serverType === 'SFTP' ? 'SSH FTP' : serverType}</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- File Browser -->
+                        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+                            <div class="bg-gray-900 px-6 py-3 border-b border-gray-700 flex items-center justify-between">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-sm text-gray-400">Current Path:</span>
+                                    <span class="text-sm font-mono text-blue-400">${folder}</span>
+                                </div>
+                                ${isComplete ? '<span class="text-xs bg-green-600 text-white px-3 py-1 rounded-full">✓ Transfer Complete</span>' : '<span class="text-xs bg-yellow-600 text-white px-3 py-1 rounded-full animate-pulse">⚡ Transferring...</span>'}
+                            </div>
+                            
+                            <!-- Directory Structure -->
+                            <div class="p-6">
+                                <table class="w-full">
+                                    <thead>
+                                        <tr class="text-left text-xs text-gray-500 border-b border-gray-700">
+                                            <th class="pb-3 font-medium w-12">
+                                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-2 focus:ring-blue-500" ${isComplete ? '' : 'disabled'}>
+                                            </th>
+                                            <th class="pb-3 font-medium">Name</th>
+                                            <th class="pb-3 font-medium">Type</th>
+                                            <th class="pb-3 font-medium">Size</th>
+                                            <th class="pb-3 font-medium">Modified</th>
+                                            <th class="pb-3 font-medium">Status</th>
+                                            <th class="pb-3 font-medium">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-sm">
+                                        <!-- Parent Directory -->
+                                        <tr class="border-b border-gray-700 hover:bg-gray-700 transition-colors">
+                                            <td class="py-3"></td>
+                                            <td class="py-3 flex items-center space-x-2">
+                                                ${icons.folder}
+                                                <span class="text-gray-400">..</span>
+                                            </td>
+                                            <td class="py-3 text-gray-500">Folder</td>
+                                            <td class="py-3 text-gray-500">-</td>
+                                            <td class="py-3 text-gray-500">-</td>
+                                            <td class="py-3"></td>
+                                            <td class="py-3"></td>
+                                        </tr>
+                                        
+                                        <!-- Existing Files in /temp/Martin -->
+                                        <tr class="border-b border-gray-700 hover:bg-gray-700 transition-colors">
+                                            <td class="py-3">
+                                                <input type="checkbox" value="config.txt" onchange="toggleFileSelection('config.txt')" class="file-checkbox w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-2 focus:ring-blue-500" ${isComplete ? '' : 'disabled'}>
+                                            </td>
+                                            <td class="py-3 flex items-center space-x-2">
+                                                ${icons.file}
+                                                <span class="text-gray-300">config.txt</span>
+                                            </td>
+                                            <td class="py-3 text-gray-400">Text File</td>
+                                            <td class="py-3 text-gray-400">1.2 KB</td>
+                                            <td class="py-3 text-gray-400">2024-12-03 10:30</td>
+                                            <td class="py-3 text-green-400 text-xs">✓ Stored</td>
+                                            <td class="py-3">
+                                                <button onclick="downloadFile('config.txt', 'text/plain')" class="text-blue-400 hover:text-blue-300 transition-colors p-2 hover:bg-gray-700 rounded" title="Download file" ${isComplete ? '' : 'disabled'}>
+                                                    ${icons.download}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        
+                                        <tr class="border-b border-gray-700 hover:bg-gray-700 transition-colors">
+                                            <td class="py-3">
+                                                <input type="checkbox" value="backup_log.csv" onchange="toggleFileSelection('backup_log.csv')" class="file-checkbox w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-2 focus:ring-blue-500" ${isComplete ? '' : 'disabled'}>
+                                            </td>
+                                            <td class="py-3 flex items-center space-x-2">
+                                                ${icons.file}
+                                                <span class="text-gray-300">backup_log.csv</span>
+                                            </td>
+                                            <td class="py-3 text-gray-400">CSV File</td>
+                                            <td class="py-3 text-gray-400">845 KB</td>
+                                            <td class="py-3 text-gray-400">2024-12-02 14:15</td>
+                                            <td class="py-3 text-green-400 text-xs">✓ Stored</td>
+                                            <td class="py-3">
+                                                <button onclick="downloadFile('backup_log.csv', 'text/csv')" class="text-blue-400 hover:text-blue-300 transition-colors p-2 hover:bg-gray-700 rounded" title="Download file" ${isComplete ? '' : 'disabled'}>
+                                                    ${icons.download}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        
+                                        <!-- Transferred File -->
+                                        <tr class="${isComplete ? 'bg-green-900 bg-opacity-20 border-green-700' : 'bg-yellow-900 bg-opacity-20 border-yellow-700'} border-b hover:bg-opacity-30 transition-all">
+                                            <td class="py-3">
+                                                <input type="checkbox" value="${fileName}" onchange="toggleFileSelection('${fileName}')" class="file-checkbox w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-2 focus:ring-blue-500" ${isComplete ? '' : 'disabled'}>
+                                            </td>
+                                            <td class="py-3 flex items-center space-x-2">
+                                                ${icons.file}
+                                                <span class="${isComplete ? 'text-green-300' : 'text-yellow-300'} font-medium">${fileName}</span>
+                                                ${isComplete ? '' : '<span class="ml-2 text-xs text-yellow-400 animate-pulse">⚡ Incoming...</span>'}
+                                            </td>
+                                            <td class="py-3 ${isComplete ? 'text-green-400' : 'text-yellow-400'}">${fileName.endsWith('.csv') ? 'CSV File' : fileName.endsWith('.xlsx') ? 'Excel File' : 'File'}</td>
+                                            <td class="py-3 ${isComplete ? 'text-green-400' : 'text-yellow-400'}">${fileSize}</td>
+                                            <td class="py-3 ${isComplete ? 'text-green-400' : 'text-yellow-400'}">${new Date().toLocaleString('en-US', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'})}</td>
+                                            <td class="py-3">
+                                                ${isComplete ? 
+                                                    '<span class="text-xs bg-green-600 text-white px-2 py-1 rounded">✓ Complete</span>' : 
+                                                    '<span class="text-xs bg-yellow-600 text-white px-2 py-1 rounded animate-pulse">⚡ Transferring</span>'
+                                                }
+                                            </td>
+                                            <td class="py-3">
+                                                <button onclick="downloadFile('${fileName}', '${fileName.endsWith('.csv') ? 'text/csv' : fileName.endsWith('.xlsx') ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/octet-stream'}')" class="${isComplete ? 'text-green-400 hover:text-green-300' : 'text-gray-600'} transition-colors p-2 hover:bg-gray-700 rounded" title="Download file" ${isComplete ? '' : 'disabled'}>
+                                                    ${icons.download}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="mt-6 space-y-4">
+                            <!-- Download Selected Files Section -->
+                            ${isComplete ? 
+                                `<div class="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
+                                    <div class="flex items-center space-x-3">
+                                        <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                                        </svg>
+                                        <div>
+                                            <p class="text-white font-medium">Download Files</p>
+                                            <p class="text-xs text-gray-400">Selected: <span id="selectedCount">0</span> file(s)</p>
+                                        </div>
+                                    </div>
+                                    <button onclick="downloadSelectedFiles()" id="downloadBtn" disabled class="bg-gray-700 text-gray-500 px-6 py-2 rounded-lg font-medium cursor-not-allowed transition-all duration-200">
+                                        Download Selected
+                                    </button>
+                                </div>` : ''
+                            }
+                            
+                            <div class="flex items-center justify-between">
+                                <div class="text-sm text-gray-400">
+                                    <p>Connection: <span class="text-green-400">Secure (${serverType === 'SFTP' ? 'SSH' : 'SSL/TLS'})</span></p>
+                                    <p class="mt-1">Server: <span class="text-blue-400">${serverIP}:21</span></p>
+                                </div>
+                                
+                                ${isComplete ? 
+                                    `<button onclick="completeTransferProcess()" class="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-3 rounded-xl font-medium hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl">
+                                        ✓ Complete & Return to Dashboard
+                                    </button>` : 
+                                `<button disabled class="bg-gray-700 text-gray-500 px-8 py-3 rounded-xl font-medium cursor-not-allowed">
+                                    Please wait for transfer to complete...
+                                </button>`
+                            }
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Complete transfer process
+        function completeTransferProcess() {
+            stopTransferSimulation();
+            
+            const fileName = transferData?.selectedS3File || transferData?.fileName || 'file.txt';
+            const serverType = transferData?.destinationType || 'FTP';
+            const folder = transferData?.destinationFolder || '/temp/Martin';
+            
+            // Add success notification
+            addNotification('success', 'Transfer Complete', 
+                `${fileName} → ${serverType} (${folder})`, 'Completed');
+            
+            // Reset transfer data
+            transferData.transferInProgress = false;
+            transferData.transferComplete = false;
+            transferProgress = 0;
+            selectedFilesForDownload = [];
+            
+            // Return to dashboard
+            navigateTo('dashboard');
+        }
+        
+        // Toggle file selection
+        function toggleFileSelection(fileName) {
+            const index = selectedFilesForDownload.indexOf(fileName);
+            if (index > -1) {
+                selectedFilesForDownload.splice(index, 1);
+            } else {
+                selectedFilesForDownload.push(fileName);
+            }
+            updateDownloadButton();
+        }
+        
+        // Toggle select all
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.file-checkbox');
+            
+            checkboxes.forEach(cb => {
+                cb.checked = selectAll.checked;
+                const fileName = cb.value;
+                if (selectAll.checked && !selectedFilesForDownload.includes(fileName)) {
+                    selectedFilesForDownload.push(fileName);
+                } else if (!selectAll.checked) {
+                    selectedFilesForDownload = [];
+                }
+            });
+            updateDownloadButton();
+        }
+        
+        // Update download button state
+        function updateDownloadButton() {
+            const downloadBtn = document.getElementById('downloadBtn');
+            const selectedCount = document.getElementById('selectedCount');
+            
+            if (selectedCount) {
+                selectedCount.textContent = selectedFilesForDownload.length;
+            }
+            
+            if (downloadBtn) {
+                if (selectedFilesForDownload.length > 0) {
+                    downloadBtn.disabled = false;
+                    downloadBtn.className = 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-6 py-2 rounded-lg font-medium hover:from-blue-700 hover:to-cyan-700 transition-all duration-200 shadow-lg hover:shadow-xl cursor-pointer';
+                } else {
+                    downloadBtn.disabled = true;
+                    downloadBtn.className = 'bg-gray-700 text-gray-500 px-6 py-2 rounded-lg font-medium cursor-not-allowed transition-all duration-200';
+                }
+            }
+        }
+        
+        // Download single file
+        function downloadFile(fileName, mimeType) {
+            // Create mock file content
+            let content = '';
+            if (fileName === 'config.txt') {
+                content = 'Server Configuration\nHost: 192.168.1.100\nPort: 21\nProtocol: FTP\nTimeout: 30s';
+            } else if (fileName === 'backup_log.csv') {
+                content = 'Date,Event,Status,Size\n2024-12-02,Backup Started,Success,845KB\n2024-12-02,Backup Completed,Success,845KB';
+            } else {
+                content = `Sample data for ${fileName}\n\nThis is a demo file transferred from AWS S3 to FTP server.\nFile: ${fileName}\nTimestamp: ${new Date().toISOString()}\n\nDemo content generated by FileFerry Agent.`;
+            }
+            
+            // Create blob and download
+            const blob = new Blob([content], { type: mimeType });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            // Show toast notification
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-20 right-6 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-slide-up';
+            toast.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span>Downloaded: <strong>${fileName}</strong></span>
+                </div>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+        
+        // Download selected files
+        function downloadSelectedFiles() {
+            if (selectedFilesForDownload.length === 0) {
+                alert('Please select at least one file to download.');
+                return;
+            }
+            
+            // Download each selected file
+            selectedFilesForDownload.forEach(fileName => {
+                let mimeType = 'application/octet-stream';
+                if (fileName.endsWith('.txt')) mimeType = 'text/plain';
+                else if (fileName.endsWith('.csv')) mimeType = 'text/csv';
+                else if (fileName.endsWith('.xlsx')) mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                
+                setTimeout(() => downloadFile(fileName, mimeType), 100);
+            });
+            
+            // Track successful transfer (AWS-only)
+            sessionStats.successfulTransfers++;
+            
+            // Navigate to thank you page
+            navigateTo('thank-you');
+        }
+        
+        // Change Request Page
+        function renderChangeRequest() {
+            return `
+                <div class="min-h-screen bg-gray-50 py-8">
+                    <div class="max-w-4xl mx-auto px-6">
+                        <!-- Breadcrumb -->
+                        <div class="flex items-center space-x-2 text-sm mb-8">
+                            <span onclick="navigateTo('dashboard')" class="text-blue-600 hover:text-blue-700 cursor-pointer flex items-center">
+                                ${icons.home} <span class="ml-1">Dashboard</span>
+                            </span>
+                            <span class="text-gray-400">/</span>
+                            <span class="text-gray-600">Change Request</span>
+                        </div>
+
+                        <!-- Form Card -->
+                        <div class="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+                            <h1 class="text-3xl font-bold text-gray-900 mb-2">Change Request</h1>
+                            <p class="text-gray-600 mb-8">Submit a new change request for approval</p>
+
+                            <form id="changeForm" class="space-y-6">
+                                <!-- Request Title -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Request Title *</label>
+                                    <input type="text" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all" placeholder="Brief description of the change" required>
+                                </div>
+
+                                <!-- Request Type and Priority -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Request Type *</label>
+                                        <select class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all" required>
+                                            <option value="">Select type...</option>
+                                            <option value="standard">Standard Change</option>
+                                            <option value="emergency">Emergency Change</option>
+                                            <option value="normal">Normal Change</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Priority *</label>
+                                        <select class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all" required>
+                                            <option value="">Select priority...</option>
+                                            <option value="critical">Critical</option>
+                                            <option value="high">High</option>
+                                            <option value="medium">Medium</option>
+                                            <option value="low">Low</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Description -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+                                    <textarea rows="6" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all resize-none" placeholder="Provide detailed description of the change..." required></textarea>
+                                </div>
+
+                                <!-- Buttons -->
+                                <div class="flex space-x-4 pt-4">
+                                    <button type="submit" class="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-3 rounded-xl font-medium hover:from-blue-700 hover:to-cyan-700 transition-all duration-200 shadow-lg hover:shadow-xl">
+                                        Submit Request
+                                    </button>
+                                    <button type="button" onclick="navigateTo('dashboard')" class="px-8 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Navigation function
+        function navigateTo(page) {
+            currentPage = page;
+            render();
+        }
+        
+        // Thank You Page with Countdown and Auto-redirect to Dashboard
+        function renderThankYou() {
+            const fileName = transferData?.selectedS3File || transferData?.fileName || 'file.txt';
+            const username = 'MartinDayalan';
+            const cloudService = 'AWS S3';
+            const destination = `${transferData.destinationType || 'FTP'} Server`;
+            
+            // Start auto-redirect countdown to dashboard
+            if (!transferData.thankYouTimerStarted) {
+                transferData.thankYouTimerStarted = true;
+                let countdown = 15;
+                
+                const countdownInterval = setInterval(() => {
+                    countdown--;
+                    const countdownEl = document.getElementById('logoutCountdown');
+                    if (countdownEl) {
+                        countdownEl.textContent = countdown;
+                    }
+                    
+                    if (countdown <= 0) {
+                        clearInterval(countdownInterval);
+                        transferData.thankYouTimerStarted = false;
+                        navigateTo('dashboard');
+                    }
+                }, 1000);
+            }
+            
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-600 flex items-center justify-center p-4">
+                    <div class="max-w-2xl w-full">
+                        <div class="bg-white rounded-2xl shadow-2xl p-8 animate-fade-in text-center">
+                            <div class="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full mb-6 animate-bounce">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                </svg>
+                            </div>
+                            
+                            <h1 class="text-4xl font-bold text-gray-900 mb-4">Thank You, ${username}</h1>
+                            <p class="text-xl text-gray-600 mb-8">Your file has been transferred successfully</p>
+                            
+                            <div class="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl p-6 mb-8">
+                                <div class="flex items-center justify-center mb-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-purple-600">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                        <polyline points="10 9 9 9 8 9"></polyline>
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-semibold text-gray-800 mb-3">Transfer Summary</h3>
+                                <div class="space-y-2 text-sm text-gray-700 text-left">
+                                    <p><span class="font-medium">File:</span> ${fileName}</p>
+                                    <p><span class="font-medium">Cloud:</span> ${cloudService}</p>
+                                    <p><span class="font-medium">Destination:</span> ${destination}</p>
+                                    <p><span class="font-medium">Status:</span> <span class="text-green-600 font-semibold">✓ Downloaded Successfully</span></p>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 mb-6">
+                                <p class="text-sm text-blue-800 font-medium">🏠 Returning to dashboard in <span id="logoutCountdown" class="font-bold text-lg">15</span> seconds</p>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <p class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600 mb-4">
+                                    Thanks for choosing FileFerry Agent!
+                                </p>
+                                <p class="text-sm text-gray-500">Check your dashboard for updated statistics</p>
+                            </div>
+                            
+                            <button onclick="transferData.thankYouTimerStarted = false; navigateTo('dashboard')" class="mt-6 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-8 py-3 rounded-xl font-medium hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg">
+                                Go to Dashboard Now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Main render function
+        function render() {
+            const app = document.getElementById('app');
+            
+            switch(currentPage) {
+                case 'login':
+                    app.innerHTML = renderLoginPage();
+                    setupLoginForm();
+                    break;
+                case 'dashboard':
+                    if (!userData.isAuthenticated) {
+                        currentPage = 'login';
+                        render();
+                        return;
+                    }
+                    app.innerHTML = renderDashboard();
+                    break;
+                case 'file-transfer':
+                    if (!userData.isAuthenticated) {
+                        currentPage = 'login';
+                        render();
+                        return;
+                    }
+                    app.innerHTML = renderFileTransfer();
+                    setupTransferForm();
+                    break;
+                case 'aws-sso':
+                    if (!userData.isAuthenticated) {
+                        currentPage = 'login';
+                        render();
+                        return;
+                    }
+                    app.innerHTML = renderAWSSSO();
+                    break;
+                case 's3-bucket':
+                    if (!userData.isAuthenticated) {
+                        currentPage = 'login';
+                        render();
+                        return;
+                    }
+                    app.innerHTML = renderS3Bucket();
+                    break;
+                case 'change-request':
+                    if (!userData.isAuthenticated) {
+                        currentPage = 'login';
+                        render();
+                        return;
+                    }
+                    app.innerHTML = renderChangeRequest();
+                    setupChangeForm();
+                    break;
+                case 'ftp-server':
+                    if (!userData.isAuthenticated) {
+                        currentPage = 'login';
+                        render();
+                        return;
+                    }
+                    app.innerHTML = renderFTPServer();
+                    break;
+                case 'thank-you':
+                    if (!userData.isAuthenticated) {
+                        currentPage = 'login';
+                        render();
+                        return;
+                    }
+                    app.innerHTML = renderThankYou();
+                    break;
+                default:
+                    currentPage = 'login';
+                    render();
+            }
+        }
+
+        // Setup login form
+        function setupLoginForm() {
+            const form = document.getElementById('loginForm');
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                // Fixed username - MartinDayalan
+                userData.username = 'MartinDayalan';
+                userData.isAuthenticated = true;
+                
+                // Reset session statistics on new login
+                sessionStats = {
+                    totalTransfers: 0,
+                    successfulTransfers: 0,
+                    awsTransfers: 0,
+                    startTime: Date.now()
+                };
+                
+                navigateTo('dashboard');
+            });
+        }
+
+        // Transfer type selection handler
+        let transferType = 'files'; // Default to 'files'
+        
+        function selectTransferType(type) {
+            transferType = type;
+            
+            const bucketBtn = document.getElementById('transferTypeBucket');
+            const filesBtn = document.getElementById('transferTypeFiles');
+            const bucketFields = document.getElementById('bucketOnlyFields');
+            const filesFields = document.getElementById('specificFilesFields');
+            
+            // Get input fields
+            const bucketNameOnly = document.getElementById('bucketNameOnly');
+            const bucketName = document.getElementById('bucketName');
+            const fileName = document.getElementById('fileName');
+            
+            if (type === 'bucket') {
+                // Update button styles
+                bucketBtn.classList.remove('border-gray-300', 'bg-white');
+                bucketBtn.classList.add('border-blue-500', 'bg-blue-50');
+                bucketBtn.querySelector('svg').classList.remove('text-gray-400');
+                bucketBtn.querySelector('svg').classList.add('text-blue-600');
+                
+                filesBtn.classList.remove('border-purple-500', 'bg-purple-50');
+                filesBtn.classList.add('border-gray-300', 'bg-white');
+                filesBtn.querySelector('svg').classList.remove('text-purple-600');
+                filesBtn.querySelector('svg').classList.add('text-gray-400');
+                
+                // Show/hide fields
+                bucketFields.style.display = 'block';
+                filesFields.style.display = 'none';
+            } else {
+                // Update button styles
+                filesBtn.classList.remove('border-gray-300', 'bg-white');
+                filesBtn.classList.add('border-purple-500', 'bg-purple-50');
+                filesBtn.querySelector('svg').classList.remove('text-gray-400');
+                filesBtn.querySelector('svg').classList.add('text-purple-600');
+                
+                bucketBtn.classList.remove('border-blue-500', 'bg-blue-50');
+                bucketBtn.classList.add('border-gray-300', 'bg-white');
+                bucketBtn.querySelector('svg').classList.remove('text-blue-600');
+                bucketBtn.querySelector('svg').classList.add('text-gray-400');
+                
+                // Show/hide fields
+                filesFields.style.display = 'block';
+                bucketFields.style.display = 'none';
+            }
+            
+            // Trigger validation after changing transfer type
+            setTimeout(() => {
+                const form = document.getElementById('transferForm');
+                if (form && form.validateForm) {
+                    form.validateForm();
+                }
+            }, 100);
+        }
+
+        // Setup transfer form
+        function setupTransferForm() {
+            const form = document.getElementById('transferForm');
+            if (!form) {
+                console.error('❌ transferForm not found!');
+                return;
+            }
+            
+            // Add real-time validation listeners
+            const assignmentGroupEl = document.getElementById('assignmentGroup');
+            const environmentEls = document.querySelectorAll('input[name="environment"]');
+            const awsRegionEl = document.getElementById('awsRegion');
+            const priorityEl = document.getElementById('priority');
+            const submitBtn = form.querySelector('button[type="submit"]');
+            
+            function validateForm() {
+                const assignmentGroup = assignmentGroupEl?.value;
+                const environment = document.querySelector('input[name="environment"]:checked')?.value;
+                const awsRegion = awsRegionEl?.value;
+                const priority = priorityEl?.value;
+                
+                let isValid = false;
+                let validationDetails = {
+                    assignmentGroup: !!assignmentGroup,
+                    environment: !!environment,
+                    awsRegion: !!awsRegion,
+                    priority: !!priority,
+                    transferType: transferType
+                };
+                
+                if (transferType === 'bucket') {
+                    const bucketNameOnly = document.getElementById('bucketNameOnly')?.value;
+                    validationDetails.bucketNameOnly = bucketNameOnly;
+                    validationDetails.bucketNameOnlyValid = bucketNameOnly && bucketNameOnly !== '-- Select S3 Bucket --';
+                    isValid = assignmentGroup && environment && awsRegion && bucketNameOnly && 
+                             bucketNameOnly !== '-- Select S3 Bucket --' && priority;
+                } else {
+                    const bucketName = document.getElementById('bucketName')?.value;
+                    const fileName = document.getElementById('fileName')?.value;
+                    validationDetails.bucketName = bucketName;
+                    validationDetails.fileName = fileName;
+                    validationDetails.bucketNameValid = bucketName && bucketName !== '-- Select S3 Bucket --';
+                    validationDetails.fileNameValid = fileName && fileName !== '-- Select bucket first --' && fileName !== '-- Select File --';
+                    isValid = assignmentGroup && environment && awsRegion && 
+                             bucketName && bucketName !== '-- Select S3 Bucket --' &&
+                             fileName && fileName !== '-- Select bucket first --' && fileName !== '-- Select File --' &&
+                             priority;
+                }
+                
+                validationDetails.isValid = isValid;
+                console.log('🔍 Validation check:', validationDetails);
+                
+                if (submitBtn) {
+                    if (isValid) {
+                        submitBtn.disabled = false;
+                        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        submitBtn.classList.add('hover:from-purple-700', 'hover:to-indigo-700');
+                        console.log('✅ Submit button ENABLED');
+                    } else {
+                        submitBtn.disabled = true;
+                        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                        submitBtn.classList.remove('hover:from-purple-700', 'hover:to-indigo-700');
+                        console.log('❌ Submit button DISABLED - Missing:', Object.keys(validationDetails).filter(k => !validationDetails[k] && k !== 'isValid'));
+                    }
+                }
+                
+                return isValid;
+            }
+            
+            // Add change listeners for real-time validation
+            assignmentGroupEl?.addEventListener('change', validateForm);
+            environmentEls?.forEach(el => el.addEventListener('change', validateForm));
+            awsRegionEl?.addEventListener('change', validateForm);
+            priorityEl?.addEventListener('change', validateForm);
+            
+            // Add listeners for bucket and file dropdowns
+            const bucketNameEl = document.getElementById('bucketName');
+            const fileNameEl = document.getElementById('fileName');
+            const bucketNameOnlyEl = document.getElementById('bucketNameOnly');
+            
+            bucketNameEl?.addEventListener('change', validateForm);
+            fileNameEl?.addEventListener('change', validateForm);
+            bucketNameOnlyEl?.addEventListener('change', validateForm);
+            
+            // Store validateForm function on form for access from other functions
+            form.validateForm = validateForm;
+            
+            // Validate on page load
+            setTimeout(validateForm, 100);
+            
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('📝 Form submitted! Validating fields...');
+                
+                // Validate all required fields
+                const assignmentGroup = document.getElementById('assignmentGroup')?.value;
+                const environment = document.querySelector('input[name="environment"]:checked')?.value;
+                const awsRegion = document.getElementById('awsRegion')?.value;
+                const priority = document.getElementById('priority')?.value;
+                
+                console.log('🔍 Form values:', {
+                    assignmentGroup,
+                    environment,
+                    awsRegion,
+                    priority,
+                    transferType
+                });
+                
+                // Check basic required fields
+                if (!assignmentGroup || assignmentGroup === '') {
+                    alert('❌ Please select an Assignment Group!');
+                    document.getElementById('assignmentGroup')?.focus();
+                    return;
+                }
+                
+                if (!environment) {
+                    alert('❌ Please select an Environment (PROD/QA/UAT)!');
+                    return;
+                }
+                
+                if (!awsRegion || awsRegion === '') {
+                    alert('❌ Please select an AWS Region!');
+                    document.getElementById('awsRegion')?.focus();
+                    return;
+                }
+                
+                console.log('✅ AWS Region validated:', awsRegion);
+                
+                // Validate based on transfer type
+                let bucketName, fileName;
+                
+                if (transferType === 'bucket') {
+                    bucketName = document.getElementById('bucketNameOnly')?.value;
+                    console.log('🪣 Bucket mode - bucketNameOnly:', bucketName);
+                    if (!bucketName || bucketName.trim() === '' || bucketName === '-- Select S3 Bucket --') {
+                        alert('❌ Please select an S3 bucket from the dropdown!');
+                        document.getElementById('bucketNameOnly')?.focus();
+                        return;
+                    }
+                    fileName = '[ENTIRE_BUCKET]'; // Special marker for entire bucket transfer
+                } else {
+                    bucketName = document.getElementById('bucketName')?.value;
+                    fileName = document.getElementById('fileName')?.value;
+                    console.log('📁 Files mode - bucketName:', bucketName, 'fileName:', fileName);
+                    if (!bucketName || bucketName.trim() === '' || bucketName === '-- Select S3 Bucket --') {
+                        alert('❌ Please select an S3 bucket from the dropdown!');
+                        document.getElementById('bucketName')?.focus();
+                        return;
+                    }
+                    if (!fileName || fileName.trim() === '' || fileName === '-- Select bucket first --' || fileName === '-- Select File --') {
+                        alert('❌ Please select a file from the dropdown!\n\n💡 Tip: Select a bucket first, then the file dropdown will populate automatically.');
+                        document.getElementById('fileName')?.focus();
+                        return;
+                    }
+                }
+                
+                if (!priority || priority === '') {
+                    alert('❌ Please select a Priority level!');
+                    document.getElementById('priority')?.focus();
+                    return;
+                }
+                
+                // All validations passed - save data and navigate
+                console.log('✅ All validations passed! Navigating to AWS SSO page...');
+                transferData = {
+                    assignmentGroup: assignmentGroup,
+                    environment: environment,
+                    awsRegion: awsRegion,
+                    bucketName: bucketName,
+                    fileName: fileName,
+                    priority: priority,
+                    transferType: transferType
+                };
+                
+                console.log('📦 Transfer data saved:', transferData);
+                
+                // Start 1-minute countdown before auto-redirect
+                startPageTimer();
+                console.log('🚀 Navigating to aws-sso page...');
+                navigateTo('aws-sso');
+            });
+        }
+        
+        // Start 1-minute countdown timer
+        function startPageTimer() {
+            // Clear any existing timer
+            if (pageTimer) {
+                clearInterval(pageTimer);
+            }
+            
+            remainingSeconds = 60; // Reset to 60 seconds
+            
+            pageTimer = setInterval(() => {
+                remainingSeconds--;
+                
+                // Update timer display if on AWS SSO page
+                const timerElement = document.getElementById('countdown-timer');
+                if (timerElement) {
+                    timerElement.textContent = remainingSeconds;
+                    
+                    // Add warning class when less than 10 seconds
+                    if (remainingSeconds <= 10) {
+                        timerElement.classList.add('text-red-600', 'font-bold');
+                        timerElement.style.animation = 'pulse 1s infinite';
+                    }
+                }
+                
+                // NO AUTO-REDIRECT - User must manually proceed
+                if (remainingSeconds <= 0) {
+                    clearInterval(pageTimer);
+                    const timerBox = document.getElementById('timer-box');
+                    if (timerBox) {
+                        timerBox.innerHTML = `
+                            <div class="bg-red-50 border-2 border-red-300 rounded-xl p-4">
+                                <p class="text-red-800 font-semibold">⏰ Time Elapsed!</p>
+                                <p class="text-sm text-red-600 mt-1">Please proceed with destination server configuration.</p>
+                            </div>
+                        `;
+                    }
+                }
+            }, 1000);
+        }
+        
+        // Handle destination server change
+        function handleDestinationChange() {
+            const serverType = document.getElementById('destinationServer')?.value;
+            const folderSection = document.getElementById('folderDetailsSection');
+            
+            if (serverType && serverType !== '') {
+                folderSection.style.display = 'block';
+            } else {
+                folderSection.style.display = 'none';
+            }
+        }
+        
+        // Handle final transfer confirmation
+        function confirmTransfer() {
+            const serverType = document.getElementById('destinationServer')?.value;
+            const folderPath = document.getElementById('folderPath')?.value;
+            
+            if (!serverType) {
+                alert('Please select a destination server type!');
+                return;
+            }
+            
+            if (!folderPath) {
+                alert('Please enter the folder path!');
+                return;
+            }
+            
+            stopPageTimer();
+            
+            // Save destination info to transferData
+            transferData.destinationType = serverType;
+            transferData.destinationFolder = folderPath;
+            
+            // Navigate to S3 bucket page to verify file via SSO
+            navigateTo('s3-bucket');
+        }
+        
+        // Stop the timer
+        function stopPageTimer() {
+            if (pageTimer) {
+                clearInterval(pageTimer);
+                pageTimer = null;
+            }
+        }
+
+        // Setup change form
+        function setupChangeForm() {
+            const form = document.getElementById('changeForm');
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                alert('Change request submitted successfully!');
+                navigateTo('dashboard');
+            });
+        }
+
+        // Initial render
+        render();
+    </script>
+    
+    <!-- Notification Center - Bottom Left -->
+    <div id="notificationCenter" style="position: fixed; bottom: 100px; left: 20px; z-index: 1000;">
+        <button id="notificationButton" onclick="toggleNotifications()" style="position: relative; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); width: 56px; height: 56px; border-radius: 50%; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); transition: all 0.3s ease; display: flex; align-items: center; justify-content: center;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <span id="notificationBadge" style="display: none; position: absolute; top: 8px; right: 8px; background: #ef4444; color: white; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center;">0</span>
+        </button>
+        
+        <div id="notificationPanel" style="display: none; position: absolute; bottom: 70px; left: 0; width: 380px; max-height: 500px; background: white; border-radius: 16px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); overflow: hidden;">
+            <div style="padding: 16px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; font-size: 18px; font-weight: 600;">Transfer Notifications</h3>
+                    <button onclick="clearAllNotifications()" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">Clear All</button>
+                </div>
+            </div>
+            <div id="notificationList" style="max-height: 400px; overflow-y: auto; padding: 12px;">
+                <!-- Notifications will be added here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- HCL Technologies Branding - Bottom Right -->
+    <div style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
+        <div style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); border: 1px solid rgba(255, 255, 255, 0.3);">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="40" height="40" rx="8" fill="#0066CC"/>
+                    <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="16" font-weight="bold">HCL</text>
+                </svg>
+                <div>
+                    <div style="font-size: 14px; font-weight: 600; color: #1a202c; line-height: 1.2;">HCL Technologies</div>
+                    <div style="font-size: 11px; color: #718096; line-height: 1.2;">Powered by Innovation</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Notification System
+        let notifications = [];
+        
+        function toggleNotifications() {
+            const panel = document.getElementById('notificationPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        function addNotification(type, title, message, estimatedTime = null) {
+            const notification = {
+                id: Date.now(),
+                type: type, // 'success', 'error', 'info', 'progress'
+                title: title,
+                message: message,
+                estimatedTime: estimatedTime,
+                timestamp: new Date()
+            };
+            
+            notifications.unshift(notification);
+            updateNotificationUI();
+            
+            // Auto-show panel for new notifications
+            document.getElementById('notificationPanel').style.display = 'block';
+            
+            // Auto-hide after 5 seconds if success
+            if (type === 'success') {
+                setTimeout(() => {
+                    document.getElementById('notificationPanel').style.display = 'none';
+                }, 5000);
+            }
+        }
+        
+        function updateNotificationUI() {
+            const badge = document.getElementById('notificationBadge');
+            const list = document.getElementById('notificationList');
+            
+            // Update badge
+            if (notifications.length > 0) {
+                badge.style.display = 'block';
+                badge.textContent = notifications.length;
+            } else {
+                badge.style.display = 'none';
+            }
+            
+            // Update list
+            if (notifications.length === 0) {
+                list.innerHTML = '<div style="padding: 40px 20px; text-align: center; color: #9ca3af;"><p style="margin: 0;">No notifications</p></div>';
+            } else {
+                list.innerHTML = notifications.map(notif => {
+                    const icons = {
+                        success: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>',
+                        error: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
+                        info: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
+                        progress: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>'
+                    };
+                    
+                    const colors = {
+                        success: '#d1fae5',
+                        error: '#fee2e2',
+                        info: '#dbeafe',
+                        progress: '#fef3c7'
+                    };
+                    
+                    return `
+                        <div style="background: ${colors[notif.type]}; border-radius: 12px; padding: 12px; margin-bottom: 8px; border-left: 4px solid ${notif.type === 'success' ? '#10b981' : notif.type === 'error' ? '#ef4444' : notif.type === 'info' ? '#3b82f6' : '#f59e0b'};">
+                            <div style="display: flex; gap: 12px;">
+                                <div style="flex-shrink: 0; padding-top: 2px;">${icons[notif.type]}</div>
+                                <div style="flex-grow: 1;">
+                                    <div style="font-weight: 600; font-size: 14px; color: #1f2937; margin-bottom: 4px;">${notif.title}</div>
+                                    <div style="font-size: 13px; color: #4b5563; margin-bottom: 4px;">${notif.message}</div>
+                                    ${notif.estimatedTime ? `<div style="font-size: 12px; color: #6b7280; font-style: italic;">⏱️ Est. Time: ${notif.estimatedTime}</div>` : ''}
+                                    <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">${formatTimestamp(notif.timestamp)}</div>
+                                </div>
+                                <button onclick="removeNotification(${notif.id})" style="background: transparent; border: none; color: #9ca3af; cursor: pointer; font-size: 18px; line-height: 1; padding: 0; width: 20px; height: 20px;">×</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+        
+        function removeNotification(id) {
+            notifications = notifications.filter(n => n.id !== id);
+            updateNotificationUI();
+        }
+        
+        function clearAllNotifications() {
+            notifications = [];
+            updateNotificationUI();
+        }
+        
+        function formatTimestamp(date) {
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000);
+            
+            if (diff < 60) return 'Just now';
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return date.toLocaleDateString();
+        }
+        
+        // Demo notifications (remove in production)
+        setTimeout(() => {
+            addNotification('progress', 'Transfer Started', 'File transfer to FTP server initiated', '~5 minutes');
+        }, 3000);
+        
+        setTimeout(() => {
+            addNotification('success', 'Transfer Complete', 'test-file.txt successfully transferred to ftp.example.com');
+        }, 8000);
+        
+        // Toggle profile dropdown menu
+        function toggleProfileDropdown() {
+            const dropdown = document.getElementById('profileDropdown');
+            showProfileDropdown = !showProfileDropdown;
+            dropdown.classList.toggle('hidden', !showProfileDropdown);
+        }
+        
+        // Logout function
+        function logout() {
+            // Clear user data
+            userData = { username: '', isAuthenticated: false };
+            transferData = {};
+            showProfileDropdown = false;
+            
+            // Reset session statistics
+            sessionStats = {
+                totalTransfers: 0,
+                successfulTransfers: 0,
+                awsTransfers: 0,
+                startTime: Date.now()
+            };
+            
+            // Stop any running timers
+            if (pageTimer) {
+                clearInterval(pageTimer);
+                pageTimer = null;
+            }
+            if (transferTimer) {
+                clearInterval(transferTimer);
+                transferTimer = null;
+            }
+            
+            // Navigate back to login
+            navigateTo('login');
+            
+            // Show logout notification
+            showToast('Logged out successfully');
+        }
+        
+        // Close notification panel when clicking outside
+        document.addEventListener('click', function(event) {
+            const panel = document.getElementById('notificationPanel');
+            const button = document.getElementById('notificationButton');
+            if (!panel.contains(event.target) && !button.contains(event.target)) {
+                panel.style.display = 'none';
+            }
+        });
+        
+        // Close profile dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('profileDropdown');
+            const profileButton = event.target.closest('button[onclick="toggleProfileDropdown()"]');
+            
+            if (dropdown && !dropdown.contains(event.target) && !profileButton) {
+                showProfileDropdown = false;
+                dropdown.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

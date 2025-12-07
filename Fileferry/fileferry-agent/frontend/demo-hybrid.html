@@ -1,0 +1,1803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FileFerry - Hybrid Cloud Transfer (AWS + Azure)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.5s ease-out;
+        }
+        .provider-card {
+            transition: all 0.3s ease;
+        }
+        .provider-card.selected {
+            border-color: #8b5cf6;
+            background-color: #f3e8ff;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+        }
+        .provider-card.aws.selected {
+            border-color: #ff9900;
+            background-color: #fff5e6;
+            box-shadow: 0 0 0 3px rgba(255, 153, 0, 0.2);
+        }
+        .provider-card.azure.selected {
+            border-color: #0078d4;
+            background-color: #e6f2ff;
+            box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.2);
+        }
+        
+        .hero-background {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-background::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(circle at 20% 50%, rgba(255,255,255,0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255,255,255,0.1) 0%, transparent 50%);
+            animation: float 20s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        .superhero-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .cloud {
+            position: absolute;
+            background: rgba(255,255,255,0.3);
+            border-radius: 100px;
+            animation: drift 30s linear infinite;
+        }
+        .cloud::before,
+        .cloud::after {
+            content: '';
+            position: absolute;
+            background: rgba(255,255,255,0.3);
+            border-radius: 100px;
+        }
+        .cloud-1 { width: 100px; height: 40px; top: 20%; left: -100px; }
+        .cloud-1::before { width: 50px; height: 40px; top: -20px; left: 10px; }
+        .cloud-1::after { width: 60px; height: 35px; top: -10px; right: 10px; }
+        .cloud-2 { width: 120px; height: 50px; top: 60%; left: -120px; animation-delay: -10s; }
+        .cloud-2::before { width: 60px; height: 50px; top: -25px; left: 15px; }
+        .cloud-2::after { width: 70px; height: 45px; top: -15px; right: 15px; }
+        @keyframes drift {
+            from { transform: translateX(0); }
+            to { transform: translateX(100vw); }
+        }
+        .server-icon {
+            position: absolute;
+            right: 10%;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 80px;
+            opacity: 0.2;
+            animation: pulse 3s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: translateY(-50%) scale(1); opacity: 0.2; }
+            50% { transform: translateY(-50%) scale(1.1); opacity: 0.3; }
+        }
+        .data-stream {
+            position: absolute;
+            width: 2px;
+            height: 20px;
+            background: linear-gradient(to bottom, transparent, #fff, transparent);
+            animation: stream 2s linear infinite;
+        }
+        @keyframes stream {
+            from { transform: translateY(-100px); opacity: 0; }
+            50% { opacity: 1; }
+            to { transform: translateY(100px); opacity: 0; }
+        }
+        
+        /* Flying superhero animation from cloud to FTP server */
+        @keyframes flySuperhero {
+            0% { left: 0px; transform: translateY(-50%) rotate(-10deg) scale(1); }
+            25% { transform: translateY(-60%) rotate(5deg) scale(1.1); }
+            50% { left: 120px; transform: translateY(-50%) rotate(0deg) scale(1.15); }
+            75% { transform: translateY(-40%) rotate(-5deg) scale(1.1); }
+            100% { left: 240px; transform: translateY(-50%) rotate(10deg) scale(1); }
+        }
+        
+        /* Files following superhero with slight delay and offset */
+        @keyframes followSuperhero1 {
+            0% { left: 10px; opacity: 0; transform: translateY(-50%) scale(0.6); }
+            15% { opacity: 0.7; }
+            25% { left: 40px; transform: translateY(-55%) scale(0.8); }
+            50% { left: 130px; transform: translateY(-45%) scale(0.9); }
+            75% { left: 200px; transform: translateY(-55%) scale(0.8); }
+            90% { opacity: 0.7; }
+            100% { left: 250px; opacity: 0; transform: translateY(-50%) scale(0.6); }
+        }
+        @keyframes followSuperhero2 {
+            0% { left: 10px; opacity: 0; transform: translateY(-50%) rotate(0deg) scale(0.6); }
+            15% { opacity: 0.7; }
+            25% { left: 35px; transform: translateY(-60%) rotate(90deg) scale(0.8); }
+            50% { left: 125px; transform: translateY(-50%) rotate(180deg) scale(0.9); }
+            75% { left: 195px; transform: translateY(-60%) rotate(270deg) scale(0.8); }
+            90% { opacity: 0.7; }
+            100% { left: 250px; opacity: 0; transform: translateY(-50%) rotate(360deg) scale(0.6); }
+        }
+        @keyframes followSuperhero3 {
+            0% { left: 10px; opacity: 0; transform: translateY(-50%) scale(0.6); }
+            15% { opacity: 0.7; }
+            25% { left: 30px; transform: translateY(-40%) scale(0.8); }
+            50% { left: 120px; transform: translateY(-55%) scale(0.95); }
+            75% { left: 190px; transform: translateY(-40%) scale(0.8); }
+            90% { opacity: 0.7; }
+            100% { left: 250px; opacity: 0; transform: translateY(-50%) scale(0.6); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app"></div>
+
+    <script>
+        // Navigation state
+        let currentPage = 'login';
+        let transferData = {};
+        
+        // Notification system
+        let notifications = [];
+        let notificationIdCounter = 0;
+        
+        // Session statistics tracking
+        let sessionStats = {
+            totalTransfers: 0,
+            successfulTransfers: 0,
+            awsTransfers: 0,
+            azureTransfers: 0,
+            startTime: Date.now()
+        };
+        
+        // Mock AWS S3 data
+        const s3Buckets = {
+            'fileferry-demo-bucket': [
+                { name: 'customer-data-2024.csv', size: '2.3 MB', modified: '2024-12-01 10:30 AM', type: 'CSV' },
+                { name: 'sales-report-q4.xlsx', size: '5.7 MB', modified: '2024-12-02 02:15 PM', type: 'Excel' },
+                { name: 'backup-archive.zip', size: '125 MB', modified: '2024-11-30 11:45 AM', type: 'ZIP' },
+                { name: 'images/logo.png', size: '342 KB', modified: '2024-12-03 03:20 PM', type: 'Image' },
+                { name: 'documents/contract.pdf', size: '892 KB', modified: '2024-11-28 01:10 PM', type: 'PDF' },
+                { name: 'large-dataset.parquet', size: '1.2 TB', modified: '2024-12-04 09:00 AM', type: 'Parquet' }
+            ],
+            'fileferry-backup-bucket': [
+                { name: 'backup-full-20241201.zip', size: '15.2 GB', modified: '2024-12-01 02:00 AM', type: 'ZIP' },
+                { name: 'backup-incremental-20241202.zip', size: '2.8 GB', modified: '2024-12-02 02:00 AM', type: 'ZIP' },
+                { name: 'backup-logs-november.tar.gz', size: '450 MB', modified: '2024-11-30 11:30 PM', type: 'Archive' },
+                { name: 'backup-config-20241203.json', size: '125 KB', modified: '2024-12-03 02:15 AM', type: 'JSON' }
+            ],
+            'fileferry-reports-prod': [
+                { name: 'monthly-sales-november.xlsx', size: '12.3 MB', modified: '2024-11-30 06:00 PM', type: 'Excel' },
+                { name: 'customer-analytics-q4.csv', size: '8.7 MB', modified: '2024-12-02 10:30 AM', type: 'CSV' },
+                { name: 'revenue-forecast-2025.xlsx', size: '5.2 MB', modified: '2024-12-03 03:45 PM', type: 'Excel' },
+                { name: 'executive-dashboard-dec.pdf', size: '2.1 MB', modified: '2024-12-04 08:00 AM', type: 'PDF' }
+            ]
+        };
+
+        // Mock Azure Storage data
+        const azureStorageAccounts = {
+            'fileferrydemostorage': {
+                containers: [
+                    { name: 'customer-data', type: 'blob', files: [
+                        { name: 'profiles-2024.json', size: '1.8 MB', modified: '2024-12-01 09:00 AM' },
+                        { name: 'transactions.csv', size: '4.2 MB', modified: '2024-12-02 11:30 AM' }
+                    ]},
+                    { name: 'reports-share', type: 'file', files: [
+                        { name: 'annual-report.pdf', size: '12.5 MB', modified: '2024-11-30 04:00 PM' },
+                        { name: 'quarterly-summary.xlsx', size: '3.7 MB', modified: '2024-12-01 02:15 PM' }
+                    ]},
+                    { name: 'analytics-table', type: 'table', files: [
+                        { name: 'user-metrics', size: '250 KB', modified: '2024-12-03 10:00 AM' },
+                        { name: 'session-data', size: '890 KB', modified: '2024-12-04 08:30 AM' }
+                    ]}
+                ]
+            },
+            'fileferrybackupstorage': {
+                containers: [
+                    { name: 'backup-container', type: 'blob', files: [
+                        { name: 'full-backup-20241201.vhd', size: '25 GB', modified: '2024-12-01 03:00 AM' },
+                        { name: 'incremental-20241202.vhd', size: '3.2 GB', modified: '2024-12-02 03:00 AM' }
+                    ]},
+                    { name: 'archive-share', type: 'file', files: [
+                        { name: 'old-documents.zip', size: '8.5 GB', modified: '2024-11-28 11:00 PM' }
+                    ]}
+                ]
+            },
+            'fileferryproddata': {
+                containers: [
+                    { name: 'production-blob', type: 'blob', files: [
+                        { name: 'app-data.json', size: '567 KB', modified: '2024-12-04 12:00 PM' },
+                        { name: 'user-uploads.zip', size: '156 MB', modified: '2024-12-03 05:30 PM' }
+                    ]},
+                    { name: 'logs-share', type: 'file', files: [
+                        { name: 'application-logs-dec.txt', size: '45 MB', modified: '2024-12-04 11:00 AM' }
+                    ]}
+                ]
+            }
+        };
+
+        // Lucide icons as SVG strings
+        const icons = {
+            user: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>',
+            zap: '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>',
+            lock: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>',
+            fileText: '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
+            arrowRight: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>',
+            home: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
+            checkCircle: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>',
+            shield: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>',
+            cloud: '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>',
+            logOut: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>',
+            server: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>',
+            folder: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" class="text-yellow-400"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>',
+            file: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="text-gray-400"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"></path><path d="M14 2v6h6"></path></svg>',
+            download: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>'
+        };
+
+        // Navigation function
+        function navigateTo(page) {
+            currentPage = page;
+            render();
+            
+            // Add welcome notification when navigating to dashboard
+            if (page === 'dashboard') {
+                setTimeout(() => {
+                    addNotification('success', 'Welcome Back!', 'You have successfully logged in to FileFerry');
+                }, 500);
+            }
+        }
+
+        // Login Page
+        function renderLogin() {
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-600 flex items-center justify-center p-4">
+                    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md animate-fade-in">
+                        <div class="text-center mb-8">
+                            <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-full mb-4">
+                                ${icons.zap}
+                            </div>
+                            <h1 class="text-3xl font-bold text-gray-900 mb-2">FileFerry</h1>
+                            <p class="text-gray-600">Sign in to your account</p>
+                        </div>
+
+                        <form onsubmit="event.preventDefault(); navigateTo('dashboard');" class="space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Username</label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        ${icons.user}
+                                    </div>
+                                    <input type="text" id="username" value="MartinDayalan" readonly class="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-100 text-gray-700 cursor-not-allowed outline-none" required>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        ${icons.lock}
+                                    </div>
+                                    <input type="password" value="password" class="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all">
+                                </div>
+                            </div>
+
+                            <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-3 rounded-xl font-medium hover:from-purple-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl">
+                                Sign In
+                            </button>
+                        </form>
+
+                        <div class="mt-6 text-center text-sm text-gray-600">
+                            Demo credentials: admin / password
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Dashboard Page
+        function renderDashboard() {
+            // Calculate real-time statistics
+            const activeTransfers = sessionStats.awsTransfers + sessionStats.azureTransfers;
+            const successRate = sessionStats.totalTransfers > 0 
+                ? ((sessionStats.successfulTransfers / sessionStats.totalTransfers) * 100).toFixed(1)
+                : '100.0';
+            
+            // Calculate cost savings (hybrid approach saves ~17% compared to AWS-only)
+            const costSavings = sessionStats.azureTransfers > 0 ? '17' : '0';
+            
+            // Calculate time taken in session
+            const sessionTimeMinutes = Math.floor((Date.now() - sessionStats.startTime) / 60000);
+            const sessionTimeDisplay = sessionTimeMinutes < 60 
+                ? `${sessionTimeMinutes}min`
+                : `${Math.floor(sessionTimeMinutes / 60)}h ${sessionTimeMinutes % 60}m`;
+            
+            return `
+                <div class="min-h-screen bg-gray-50">
+                    <!-- Header -->
+                    <div class="bg-white border-b border-gray-200 px-6 py-4">
+                        <div class="max-w-7xl mx-auto flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                                </div>
+                                <h1 class="text-xl font-bold text-gray-900">FileFerry</h1>
+                            </div>
+                            <div class="flex items-center space-x-3 relative">
+                                <span class="text-sm text-gray-600">Welcome, <strong>MartinDayalan</strong></span>
+                                <button onclick="toggleProfileDropdown()" class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center hover:bg-purple-200 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                    <span class="text-purple-600 font-semibold">M</span>
+                                </button>
+                                
+                                <!-- Dropdown Menu -->
+                                <div id="profileDropdown" class="absolute right-0 top-12 bg-white rounded-lg shadow-lg border border-gray-200 w-48 hidden z-50">
+                                    <div class="p-3 border-b border-gray-100">
+                                        <p class="text-sm font-semibold text-gray-900">MartinDayalan</p>
+                                        <p class="text-xs text-gray-500">FileFerry User</p>
+                                    </div>
+                                    <button onclick="logout()" class="w-full flex items-center space-x-2 px-4 py-3 text-left hover:bg-red-50 transition-colors text-red-600 text-sm font-medium">
+                                        ${icons.logOut}
+                                        <span>Logout</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="max-w-7xl mx-auto px-6 py-8">
+                        <!-- Hero Section with Background Animation -->
+                        <div class="hero-background rounded-3xl p-12 mb-8 relative" style="min-height: 400px;">
+                            <!-- Animated Clouds -->
+                            <div class="superhero-container">
+                                <div class="cloud cloud-1"></div>
+                                <div class="cloud cloud-2"></div>
+                                <!-- Data Streams -->
+                                <div class="data-stream" style="left: 30%; animation-delay: 0s;"></div>
+                                <div class="data-stream" style="left: 50%; animation-delay: 0.7s;"></div>
+                                <div class="data-stream" style="left: 70%; animation-delay: 1.4s;"></div>
+                                <!-- Server Icon -->
+                                <div class="server-icon">🖥️</div>
+                            </div>
+
+                            
+                            <div class="text-center mb-8 relative z-10">
+                                <div class="relative inline-block mb-4" style="width: 300px; height: 120px;">
+                                    <!-- Cloud on left -->
+                                    <div class="absolute left-0 top-1/2 -translate-y-1/2 text-5xl animate-pulse">☁️</div>
+                                    
+                                    <!-- Flying Superhero animation -->
+                                    <div class="absolute top-1/2 -translate-y-1/2 text-6xl" style="animation: flySuperhero 4s ease-in-out infinite; filter: drop-shadow(0 0 10px rgba(139,92,246,0.5));">🦸‍♂️</div>
+                                    
+                                    <!-- FTP Server on right -->
+                                    <div class="absolute right-0 top-1/2 -translate-y-1/2 text-5xl animate-pulse" style="animation-delay: 0.5s;">🖥️</div>
+                                    
+                                    <!-- Moving file animations following superhero -->
+                                    <div class="absolute top-1/2 -translate-y-1/2 text-2xl" style="animation: followSuperhero1 4s infinite; opacity: 0.7;">📄</div>
+                                    <div class="absolute top-1/2 -translate-y-1/2 text-2xl" style="animation: followSuperhero2 4s infinite; animation-delay: 0.3s; opacity: 0.7;">📦</div>
+                                    <div class="absolute top-1/2 -translate-y-1/2 text-2xl" style="animation: followSuperhero3 4s infinite; animation-delay: 0.6s; opacity: 0.7;">📊</div>
+                                </div>
+                                <h2 class="text-4xl font-bold text-white mb-3">Welcome to FileFerry</h2>
+                                <p class="text-purple-100 text-lg">Your superhero for secure file transfers</p>
+                            </div>
+
+                            <div class="flex justify-center relative z-10">
+                                <div onclick="navigateTo('file-transfer')" class="bg-white/10 backdrop-blur-md rounded-2xl p-10 cursor-pointer hover:bg-white/20 hover:-translate-y-2 hover:shadow-2xl transition-all duration-300 group max-w-md w-full border-2 border-white/30">
+                                    <div class="flex items-center justify-between mb-6">
+                                        <div class="w-20 h-20 bg-white/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            ${icons.fileText}
+                                        </div>
+                                        <div class="text-white/90 group-hover:translate-x-2 transition-transform">
+                                            ${icons.arrowRight}
+                                        </div>
+                                    </div>
+                                    <h3 class="text-3xl font-bold text-white mb-3">Start Transfer</h3>
+                                    <p class="text-purple-100 text-lg">Initiate secure file transfer to FTP server</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stats Cards -->
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div class="bg-white rounded-xl p-6 shadow-md border border-gray-100">
+                                <p class="text-sm text-gray-600 mb-1">Session Transfers</p>
+                                <p class="text-3xl font-bold text-gray-900">${activeTransfers}</p>
+                                <p class="text-xs text-gray-500 mt-1">AWS: ${sessionStats.awsTransfers} | Azure: ${sessionStats.azureTransfers}</p>
+                            </div>
+                            <div class="bg-white rounded-xl p-6 shadow-md border border-gray-100">
+                                <p class="text-sm text-gray-600 mb-1">Success Rate</p>
+                                <p class="text-3xl font-bold text-green-600">${successRate}%</p>
+                                <p class="text-xs text-gray-500 mt-1">${sessionStats.successfulTransfers}/${sessionStats.totalTransfers} completed</p>
+                            </div>
+                            <div class="bg-white rounded-xl p-6 shadow-md border border-gray-100">
+                                <p class="text-sm text-gray-600 mb-1">Cost Savings</p>
+                                <p class="text-3xl font-bold text-blue-600">${costSavings}%</p>
+                                <p class="text-xs text-gray-500 mt-1">${sessionStats.azureTransfers > 0 ? 'Hybrid cloud active' : 'Single cloud'}</p>
+                            </div>
+                            <div class="bg-white rounded-xl p-6 shadow-md border border-gray-100">
+                                <p class="text-sm text-gray-600 mb-1">Time Taken</p>
+                                <p class="text-3xl font-bold text-purple-600">${sessionTimeDisplay}</p>
+                                <p class="text-xs text-gray-500 mt-1">Session duration</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // File Transfer Request Page - HYBRID VERSION
+        function renderFileTransfer() {
+            return `
+                <div class="min-h-screen bg-gray-50 py-8">
+                    <div class="max-w-4xl mx-auto px-6">
+                        <!-- Breadcrumb -->
+                        <div class="flex items-center space-x-2 text-sm mb-8">
+                            <span onclick="navigateTo('dashboard')" class="text-purple-600 hover:text-purple-700 cursor-pointer flex items-center">
+                                ${icons.home} <span class="ml-1">Dashboard</span>
+                            </span>
+                            <span class="text-gray-400">/</span>
+                            <span class="text-gray-600">File Transfer Request</span>
+                        </div>
+
+                        <!-- Form Card -->
+                        <div class="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+                            <h1 class="text-3xl font-bold text-gray-900 mb-2">Hybrid Cloud Transfer Request</h1>
+                            <p class="text-gray-600 mb-8">Select your cloud provider and configure the transfer</p>
+
+                            <form id="transferForm" class="space-y-6">
+                                <!-- Cloud Provider Selection -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-800 mb-3">Cloud Provider *</label>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <!-- AWS Card -->
+                                        <div onclick="selectProvider('aws')" id="provider-aws" class="provider-card aws cursor-pointer border-2 border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all">
+                                            <div class="flex items-center justify-between mb-3">
+                                                <div class="flex items-center space-x-3">
+                                                    <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="#ff9900">
+                                                            <path d="M6.763 10.036c0 .296.032.535.088.71.064.176.144.368.256.576.04.063.056.127.056.183 0 .08-.048.16-.152.24l-.503.335c-.072.048-.144.072-.208.072-.08 0-.16-.04-.239-.112-.112-.12-.207-.248-.279-.384-.072-.135-.144-.287-.224-.448-.56.66-1.263.99-2.111.99-.604 0-1.079-.172-1.431-.517-.352-.344-.528-.805-.528-1.382 0-.611.216-1.106.64-1.482.424-.376 1.004-.563 1.735-.563.24 0 .487.016.743.056.256.04.52.088.791.16v-.535c0-.56-.12-.95-.352-1.174-.24-.224-.64-.336-1.215-.336-.263 0-.535.032-.807.095-.272.064-.535.143-.791.248-.12.047-.207.08-.263.103-.056.024-.096.04-.12.04-.104 0-.16-.08-.16-.232v-.368c0-.12.016-.207.056-.263.04-.056.112-.104.216-.16.263-.135.575-.248.94-.336.367-.088.759-.128 1.167-.128.888 0 1.535.2 1.943.6.407.4.608.998.608 1.807v2.38zm-2.895 1.087c.232 0 .472-.04.727-.127.255-.088.48-.248.671-.479.12-.144.207-.304.255-.488.048-.184.08-.408.08-.672v-.319c-.208-.064-.431-.12-.671-.159-.24-.04-.479-.056-.719-.056-.511 0-.887.096-1.127.288-.24.192-.36.472-.36.847 0 .36.095.624.279.807.184.192.447.288.791.288zm5.431.719c-.128 0-.215-.024-.271-.08-.057-.048-.104-.16-.16-.311l-1.751-5.759c-.056-.168-.08-.28-.08-.336 0-.136.072-.216.216-.216h.888c.136 0 .224.024.279.08.057.048.104.16.152.311l1.255 4.95 1.167-4.95c.04-.16.088-.264.143-.311.057-.048.151-.08.271-.08h.727c.136 0 .224.024.279.08.057.048.111.16.151.311l1.183 5.015 1.287-5.015c.048-.16.104-.264.151-.311.057-.048.143-.08.279-.08h.839c.144 0 .216.072.216.216 0 .056-.008.112-.024.176-.016.063-.048.16-.104.303l-1.807 5.759c-.056.168-.104.272-.16.311-.056.048-.144.08-.271.08h-.775c-.136 0-.224-.024-.279-.08-.057-.056-.104-.16-.144-.311l-1.159-4.807-1.151 4.807c-.04.16-.088.264-.144.311-.056.056-.143.08-.279.08h-.775zm9.255.384c-.416 0-.831-.048-1.239-.144-.408-.096-.735-.2-.967-.304-.136-.064-.231-.136-.271-.2-.04-.064-.064-.136-.064-.216v-.383c0-.16.064-.24.176-.24.064 0 .128.016.192.04.064.024.16.064.272.112.359.16.743.28 1.151.36.408.08.815.12 1.223.12.647 0 1.151-.112 1.511-.344.359-.232.543-.567.543-1.007 0-.296-.096-.543-.287-.743-.192-.2-.551-.383-1.063-.543l-1.527-.479c-.775-.24-1.343-.6-1.695-.99-.351-.4-.527-.847-.527-1.343 0-.384.08-.719.24-1.015.16-.296.375-.543.64-.75.264-.2.568-.36.911-.463.344-.104.704-.152 1.087-.152.175 0 .36.008.535.032.184.024.36.056.528.088.16.04.312.08.455.127.144.048.256.096.336.144.112.064.195.128.247.192.052.064.08.152.08.256v.36c0 .16-.064.24-.176.24-.072 0-.216-.04-.423-.112-.527-.24-1.111-.36-1.751-.36-.599 0-1.063.096-1.391.288-.328.192-.488.496-.488.935 0 .296.104.551.312.767.207.215.591.423 1.151.615l1.495.479c.767.24 1.311.576 1.647.99.335.416.503.888.503 1.415 0 .392-.08.752-.24 1.063-.16.312-.384.584-.672.808-.287.232-.623.408-1.015.528-.392.112-.816.168-1.271.168z"/>
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <h3 class="font-bold text-gray-900">Amazon AWS</h3>
+                                                        <p class="text-xs text-gray-500">S3 Buckets</p>
+                                                    </div>
+                                                </div>
+                                                <div id="check-aws" class="hidden">
+                                                    ${icons.checkCircle}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Azure Card -->
+                                        <div onclick="selectProvider('azure')" id="provider-azure" class="provider-card azure cursor-pointer border-2 border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all">
+                                            <div class="flex items-center justify-between mb-3">
+                                                <div class="flex items-center space-x-3">
+                                                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="#0078d4">
+                                                            <path d="M10.966 0L6.5 10.762H0L13.034 24 18 11.238h6.5z"/>
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <h3 class="font-bold text-gray-900">Microsoft Azure</h3>
+                                                        <p class="text-xs text-gray-500">Storage Accounts</p>
+                                                    </div>
+                                                </div>
+                                                <div id="check-azure" class="hidden">
+                                                    ${icons.checkCircle}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="mt-2 text-xs text-gray-500">Select your source cloud provider for the transfer</p>
+                                </div>
+
+                                <!-- Assignment Group -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Assignment Group *</label>
+                                    <select id="assignmentGroup" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all">
+                                        <option value="">Select a team...</option>
+                                        <option value="dataops">DataOps Team</option>
+                                        <option value="devops">DevOps Team</option>
+                                        <option value="infrastructure">Infrastructure Team</option>
+                                        <option value="security">Security Team</option>
+                                    </select>
+                                </div>
+
+                                <!-- Environment -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-3">Environment *</label>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <label class="relative flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-purple-500 transition-colors">
+                                            <input type="radio" name="environment" value="PROD" class="mr-3">
+                                            <div class="flex-1">
+                                                <span class="font-medium text-gray-900">PROD</span>
+                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Production</span>
+                                            </div>
+                                        </label>
+                                        <label class="relative flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-purple-500 transition-colors">
+                                            <input type="radio" name="environment" value="QA" class="mr-3">
+                                            <div class="flex-1">
+                                                <span class="font-medium text-gray-900">QA</span>
+                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">Testing</span>
+                                            </div>
+                                        </label>
+                                        <label class="relative flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-purple-500 transition-colors">
+                                            <input type="radio" name="environment" value="UAT" class="mr-3">
+                                            <div class="flex-1">
+                                                <span class="font-medium text-gray-900">UAT</span>
+                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">User Testing</span>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Priority -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Priority *</label>
+                                    <select id="priority" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all">
+                                        <option value="">Select priority...</option>
+                                        <option value="high">High</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="low">Low</option>
+                                    </select>
+                                </div>
+
+                                <!-- AWS-specific fields -->
+                                <div id="awsFields" style="display: none;">
+                                    <div class="bg-orange-50 border-2 border-orange-200 rounded-xl p-6 space-y-4">
+                                        <h3 class="font-semibold text-gray-800 flex items-center">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#ff9900" class="mr-2">
+                                                <path d="M6.763 10.036c0 .296.032.535.088.71.064.176.144.368.256.576.04.063.056.127.056.183 0 .08-.048.16-.152.24l-.503.335c-.072.048-.144.072-.208.072-.08 0-.16-.04-.239-.112-.112-.12-.207-.248-.279-.384-.072-.135-.144-.287-.224-.448-.56.66-1.263.99-2.111.99-.604 0-1.079-.172-1.431-.517-.352-.344-.528-.805-.528-1.382 0-.611.216-1.106.64-1.482.424-.376 1.004-.563 1.735-.563.24 0 .487.016.743.056.256.04.52.088.791.16v-.535c0-.56-.12-.95-.352-1.174-.24-.224-.64-.336-1.215-.336-.263 0-.535.032-.807.095-.272.064-.535.143-.791.248-.12.047-.207.08-.263.103-.056.024-.096.04-.12.04-.104 0-.16-.08-.16-.232v-.368c0-.12.016-.207.056-.263.04-.056.112-.104.216-.16.263-.135.575-.248.94-.336.367-.088.759-.128 1.167-.128.888 0 1.535.2 1.943.6.407.4.608.998.608 1.807v2.38zm-2.895 1.087c.232 0 .472-.04.727-.127.255-.088.48-.248.671-.479.12-.144.207-.304.255-.488.048-.184.08-.408.08-.672v-.319c-.208-.064-.431-.12-.671-.159-.24-.04-.479-.056-.719-.056-.511 0-.887.096-1.127.288-.24.192-.36.472-.36.847 0 .36.095.624.279.807.184.192.447.288.791.288zm5.431.719c-.128 0-.215-.024-.271-.08-.057-.048-.104-.16-.16-.311l-1.751-5.759c-.056-.168-.08-.28-.08-.336 0-.136.072-.216.216-.216h.888c.136 0 .224.024.279.08.057.048.104.16.152.311l1.255 4.95 1.167-4.95c.04-.16.088-.264.143-.311.057-.048.151-.08.271-.08h.727c.136 0 .224.024.279.08.057.048.111.16.151.311l1.183 5.015 1.287-5.015c.048-.16.104-.264.151-.311.057-.048.143-.08.279-.08h.839c.144 0 .216.072.216.216 0 .056-.008.112-.024.176-.016.063-.048.16-.104.303l-1.807 5.759c-.056.168-.104.272-.16.311-.056.048-.144.08-.271.08h-.775c-.136 0-.224-.024-.279-.08-.057-.056-.104-.16-.144-.311l-1.159-4.807-1.151 4.807c-.04.16-.088.264-.144.311-.056.056-.143.08-.279.08h-.775zm9.255.384c-.416 0-.831-.048-1.239-.144-.408-.096-.735-.2-.967-.304-.136-.064-.231-.136-.271-.2-.04-.064-.064-.136-.064-.216v-.383c0-.16.064-.24.176-.24.064 0 .128.016.192.04.064.024.16.064.272.112.359.16.743.28 1.151.36.408.08.815.12 1.223.12.647 0 1.151-.112 1.511-.344.359-.232.543-.567.543-1.007 0-.296-.096-.543-.287-.743-.192-.2-.551-.383-1.063-.543l-1.527-.479c-.775-.24-1.343-.6-1.695-.99-.351-.4-.527-.847-.527-1.343 0-.384.08-.719.24-1.015.16-.296.375-.543.64-.75.264-.2.568-.36.911-.463.344-.104.704-.152 1.087-.152.175 0 .36.008.535.032.184.024.36.056.528.088.16.04.312.08.455.127.144.048.256.096.336.144.112.064.195.128.247.192.052.064.08.152.08.256v.36c0 .16-.064.24-.176.24-.072 0-.216-.04-.423-.112-.527-.24-1.111-.36-1.751-.36-.599 0-1.063.096-1.391.288-.328.192-.488.496-.488.935 0 .296.104.551.312.767.207.215.591.423 1.151.615l1.495.479c.767.24 1.311.576 1.647.99.335.416.503.888.503 1.415 0 .392-.08.752-.24 1.063-.16.312-.384.584-.672.808-.287.232-.623.408-1.015.528-.392.112-.816.168-1.271.168z"/>
+                                            </svg>
+                                            AWS S3 Configuration
+                                        </h3>
+                                        
+                                        <!-- AWS Region -->
+                                        <div>
+                                            <label for="awsRegion" class="block text-sm font-medium text-gray-700 mb-2">AWS Region *</label>
+                                            <select id="awsRegion" name="awsRegion" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-all">
+                                                <option value="">Select AWS Region</option>
+                                                <optgroup label="🇺🇸 US Regions">
+                                                    <option value="us-east-1">US East (N. Virginia)</option>
+                                                    <option value="us-east-2">US East (Ohio)</option>
+                                                    <option value="us-west-1">US West (N. California)</option>
+                                                    <option value="us-west-2">US West (Oregon)</option>
+                                                </optgroup>
+                                                <optgroup label="🇪🇺 Europe">
+                                                    <option value="eu-central-1">Europe (Frankfurt)</option>
+                                                    <option value="eu-west-1">Europe (Ireland)</option>
+                                                    <option value="eu-west-2">Europe (London)</option>
+                                                </optgroup>
+                                                <optgroup label="🌏 Asia Pacific">
+                                                    <option value="ap-south-1">Asia Pacific (Mumbai)</option>
+                                                    <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+                                                    <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
+                                                </optgroup>
+                                            </select>
+                                        </div>
+
+                                        <!-- S3 Bucket -->
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">S3 Bucket Name *</label>
+                                            <select id="awsBucket" onchange="updateAWSFiles(this.value)" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-all">
+                                                <option value="">-- Select S3 Bucket --</option>
+                                                <option value="fileferry-demo-bucket">📦 fileferry-demo-bucket (6 files)</option>
+                                                <option value="fileferry-backup-bucket">💾 fileferry-backup-bucket (4 files)</option>
+                                                <option value="fileferry-reports-prod">📊 fileferry-reports-prod (4 files)</option>
+                                            </select>
+                                        </div>
+
+                                        <!-- S3 File -->
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">File Name *</label>
+                                            <select id="awsFile" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-all">
+                                                <option value="">-- Select bucket first --</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Azure-specific fields -->
+                                <div id="azureFields" style="display: none;">
+                                    <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 space-y-4">
+                                        <h3 class="font-semibold text-gray-800 flex items-center">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#0078d4" class="mr-2">
+                                                <path d="M10.966 0L6.5 10.762H0L13.034 24 18 11.238h6.5z"/>
+                                            </svg>
+                                            Azure Storage Configuration
+                                        </h3>
+                                        
+                                        <!-- Azure Region -->
+                                        <div>
+                                            <label for="azureRegion" class="block text-sm font-medium text-gray-700 mb-2">Azure Region *</label>
+                                            <select id="azureRegion" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all">
+                                                <option value="">Select Azure Region</option>
+                                                <optgroup label="🇺🇸 Americas">
+                                                    <option value="eastus">East US</option>
+                                                    <option value="westus">West US</option>
+                                                    <option value="centralus">Central US</option>
+                                                </optgroup>
+                                                <optgroup label="🇪🇺 Europe">
+                                                    <option value="northeurope">North Europe</option>
+                                                    <option value="westeurope">West Europe</option>
+                                                    <option value="uksouth">UK South</option>
+                                                </optgroup>
+                                                <optgroup label="🌏 Asia Pacific">
+                                                    <option value="eastasia">East Asia</option>
+                                                    <option value="southeastasia">Southeast Asia</option>
+                                                    <option value="australiaeast">Australia East</option>
+                                                </optgroup>
+                                            </select>
+                                        </div>
+
+                                        <!-- Storage Account -->
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Storage Account Name *</label>
+                                            <select id="azureStorage" onchange="updateAzureContainers(this.value)" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all">
+                                                <option value="">-- Select Storage Account --</option>
+                                                <option value="fileferrydemostorage">🗄️ fileferrydemostorage (3 containers)</option>
+                                                <option value="fileferrybackupstorage">💾 fileferrybackupstorage (2 containers)</option>
+                                                <option value="fileferryproddata">📊 fileferryproddata (2 containers)</option>
+                                            </select>
+                                        </div>
+
+                                        <!-- Container -->
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Container Name (Type) *</label>
+                                            <select id="azureContainer" onchange="updateAzureFiles()" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all">
+                                                <option value="">-- Select storage account first --</option>
+                                            </select>
+                                            <p class="mt-1 text-xs text-gray-500">📦 Blob Storage, 📁 File Share, or 📊 Table Storage</p>
+                                        </div>
+
+                                        <!-- File -->
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">File/Blob Name *</label>
+                                            <select id="azureFile" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all">
+                                                <option value="">-- Select container first --</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Buttons -->
+                                <div class="flex space-x-4 pt-4">
+                                    <button type="submit" id="submitBtn" disabled class="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl opacity-50 cursor-not-allowed">
+                                        Continue to Authentication
+                                    </button>
+                                    <button type="button" onclick="navigateTo('dashboard')" class="px-8 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors">
+                                        Cancel
+                                    </button>
+                                </div>
+                                
+                                <!-- Form Validation Help -->
+                                <div class="mt-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
+                                    <p class="text-sm text-blue-800">
+                                        <strong>📋 Required Fields:</strong> Select cloud provider and fill all fields marked with <span class="text-red-600">*</span> to continue.
+                                    </p>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Thank You Page
+        function renderThankYou() {
+            const provider = transferData.provider === 'aws' ? 'AWS' : 'Azure';
+            const fileName = transferData?.selectedS3File || transferData?.fileName || 'file.txt';
+            const username = 'MartinDayalan';
+            const cloudService = transferData.provider === 'aws' 
+                ? 'AWS S3'
+                : 'Azure Container';
+            const destination = `${transferData.destinationType || 'FTP'} Server`;
+            
+            // Start auto-logout countdown
+            if (!transferData.thankYouTimerStarted) {
+                transferData.thankYouTimerStarted = true;
+                let countdown = 15;
+                
+                const countdownInterval = setInterval(() => {
+                    countdown--;
+                    const countdownEl = document.getElementById('logoutCountdown');
+                    if (countdownEl) {
+                        countdownEl.textContent = countdown;
+                    }
+                    
+                    if (countdown <= 0) {
+                        clearInterval(countdownInterval);
+                        logout();
+                    }
+                }, 1000);
+            }
+            
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-600 flex items-center justify-center p-4">
+                    <div class="max-w-2xl w-full">
+                        <div class="bg-white rounded-2xl shadow-2xl p-8 animate-fade-in text-center">
+                            <div class="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full mb-6 animate-bounce">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                </svg>
+                            </div>
+                            
+                            <h1 class="text-4xl font-bold text-gray-900 mb-4">Thank You, ${username}</h1>
+                            <p class="text-xl text-gray-600 mb-8">Your file has been transferred successfully</p>
+                            
+                            <div class="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl p-6 mb-8">
+                                <div class="flex items-center justify-center mb-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-purple-600">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                        <polyline points="10 9 9 9 8 9"></polyline>
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-semibold text-gray-800 mb-3">Transfer Summary</h3>
+                                <div class="space-y-2 text-sm text-gray-700 text-left">
+                                    <p><span class="font-medium">File:</span> ${fileName}</p>
+                                    <p><span class="font-medium">Cloud:</span> ${cloudService}</p>
+                                    <p><span class="font-medium">Destination:</span> ${destination}</p>
+                                    <p><span class="font-medium">Status:</span> <span class="text-green-600 font-semibold">✓ Downloaded Successfully</span></p>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 mb-6">
+                                <p class="text-sm text-yellow-800 font-medium">🔒 Your session will be disconnected automatically in <span id="logoutCountdown" class="font-bold text-lg">15</span> seconds</p>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <p class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600 mb-4">
+                                    Thanks for choosing FileFerry Agent!
+                                </p>
+                                <p class="text-sm text-gray-500">Your session has been disconnected successfully</p>
+                            </div>
+                            
+                            <button onclick="logout()" class="mt-6 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-8 py-3 rounded-xl font-medium hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg">
+                                Logout Now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Success Page
+        function renderSuccess() {
+            const provider = transferData.provider === 'aws' ? 'AWS' : 'Azure';
+            const providerColor = transferData.provider === 'aws' ? 'orange' : 'blue';
+            const sourceName = transferData.provider === 'aws' 
+                ? `${transferData.bucketName}/${transferData.fileName}`
+                : `${transferData.storageName}/${transferData.containerName}/${transferData.fileName}`;
+
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center p-4">
+                    <div class="max-w-2xl w-full">
+                        <div class="bg-white rounded-2xl shadow-2xl p-8 animate-fade-in">
+                            <div class="text-center">
+                                <div class="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4 animate-bounce">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                                </div>
+                                <h1 class="text-3xl font-bold text-gray-900 mb-2">Transfer Initiated!</h1>
+                                <p class="text-gray-600 mb-6">Your file transfer request has been successfully created</p>
+                                
+                                <div class="bg-${providerColor}-50 border-2 border-${providerColor}-200 rounded-xl p-6 mb-6">
+                                    <h3 class="font-semibold text-gray-800 mb-4">Transfer Details</h3>
+                                    <div class="space-y-2 text-left">
+                                        <p class="text-sm"><span class="font-medium">Provider:</span> ${provider}</p>
+                                        <p class="text-sm"><span class="font-medium">Source:</span> ${sourceName}</p>
+                                        <p class="text-sm"><span class="font-medium">Priority:</span> ${transferData.priority}</p>
+                                        <p class="text-sm"><span class="font-medium">Environment:</span> ${transferData.environment}</p>
+                                        <p class="text-sm"><span class="font-medium">Team:</span> ${transferData.assignmentGroup}</p>
+                                    </div>
+                                </div>
+
+                                <div class="flex space-x-4">
+                                    <button onclick="navigateTo('file-transfer')" class="flex-1 bg-purple-600 text-white py-3 rounded-xl font-medium hover:bg-purple-700 transition-colors">
+                                        New Transfer
+                                    </button>
+                                    <button onclick="navigateTo('dashboard')" class="flex-1 border-2 border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors">
+                                        Back to Dashboard
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Provider selection function
+        function selectProvider(provider) {
+            console.log('Provider selected:', provider);
+            transferData.provider = provider;
+            
+            // Update UI
+            const awsCard = document.getElementById('provider-aws');
+            const azureCard = document.getElementById('provider-azure');
+            const awsCheck = document.getElementById('check-aws');
+            const azureCheck = document.getElementById('check-azure');
+            const awsFields = document.getElementById('awsFields');
+            const azureFields = document.getElementById('azureFields');
+            
+            if (provider === 'aws') {
+                awsCard.classList.add('selected');
+                azureCard.classList.remove('selected');
+                awsCheck.classList.remove('hidden');
+                azureCheck.classList.add('hidden');
+                awsFields.style.display = 'block';
+                azureFields.style.display = 'none';
+                
+                // Clear Azure fields
+                document.getElementById('azureRegion').value = '';
+                document.getElementById('azureStorage').value = '';
+                document.getElementById('azureContainer').value = '';
+                document.getElementById('azureFile').value = '';
+            } else {
+                azureCard.classList.add('selected');
+                awsCard.classList.remove('selected');
+                azureCheck.classList.remove('hidden');
+                awsCheck.classList.add('hidden');
+                azureFields.style.display = 'block';
+                awsFields.style.display = 'none';
+                
+                // Clear AWS fields
+                document.getElementById('awsRegion').value = '';
+                document.getElementById('awsBucket').value = '';
+                document.getElementById('awsFile').value = '';
+            }
+            
+            validateForm();
+        }
+
+        // Update AWS file options
+        function updateAWSFiles(bucketName) {
+            const fileSelect = document.getElementById('awsFile');
+            fileSelect.innerHTML = '<option value="">-- Select file --</option>';
+            
+            if (bucketName && s3Buckets[bucketName]) {
+                s3Buckets[bucketName].forEach(file => {
+                    const option = document.createElement('option');
+                    option.value = file.name;
+                    option.textContent = `${file.name} (${file.size})`;
+                    fileSelect.appendChild(option);
+                });
+            }
+            
+            validateForm();
+        }
+
+        // Update Azure containers
+        function updateAzureContainers(storageName) {
+            const containerSelect = document.getElementById('azureContainer');
+            containerSelect.innerHTML = '<option value="">-- Select container --</option>';
+            
+            if (storageName && azureStorageAccounts[storageName]) {
+                azureStorageAccounts[storageName].containers.forEach(container => {
+                    const option = document.createElement('option');
+                    option.value = container.name;
+                    const typeIcon = container.type === 'blob' ? '📦' : container.type === 'file' ? '📁' : '📊';
+                    option.textContent = `${typeIcon} ${container.name} (${container.type})`;
+                    option.dataset.type = container.type;
+                    containerSelect.appendChild(option);
+                });
+            }
+            
+            // Clear file select
+            document.getElementById('azureFile').innerHTML = '<option value="">-- Select container first --</option>';
+            validateForm();
+        }
+
+        // Update Azure files
+        function updateAzureFiles() {
+            const storageName = document.getElementById('azureStorage').value;
+            const containerName = document.getElementById('azureContainer').value;
+            const fileSelect = document.getElementById('azureFile');
+            
+            fileSelect.innerHTML = '<option value="">-- Select file --</option>';
+            
+            if (storageName && containerName && azureStorageAccounts[storageName]) {
+                const container = azureStorageAccounts[storageName].containers.find(c => c.name === containerName);
+                if (container && container.files) {
+                    container.files.forEach(file => {
+                        const option = document.createElement('option');
+                        option.value = file.name;
+                        option.textContent = `${file.name} (${file.size})`;
+                        fileSelect.appendChild(option);
+                    });
+                }
+            }
+            
+            validateForm();
+        }
+
+        // Form validation
+        function validateForm() {
+            const submitBtn = document.getElementById('submitBtn');
+            if (!submitBtn) return;
+            
+            const assignmentGroup = document.getElementById('assignmentGroup').value;
+            const environment = document.querySelector('input[name="environment"]:checked');
+            const priority = document.getElementById('priority').value;
+            const provider = transferData.provider;
+            
+            let isValid = assignmentGroup && environment && priority && provider;
+            
+            if (provider === 'aws') {
+                const region = document.getElementById('awsRegion').value;
+                const bucket = document.getElementById('awsBucket').value;
+                const file = document.getElementById('awsFile').value;
+                isValid = isValid && region && bucket && file;
+            } else if (provider === 'azure') {
+                const region = document.getElementById('azureRegion').value;
+                const storage = document.getElementById('azureStorage').value;
+                const container = document.getElementById('azureContainer').value;
+                const file = document.getElementById('azureFile').value;
+                isValid = isValid && region && storage && container && file;
+            }
+            
+            console.log('Form validation:', { isValid, provider, assignmentGroup, environment, priority });
+            
+            if (isValid) {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                submitBtn.classList.add('hover:shadow-2xl', 'hover:scale-105');
+            } else {
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                submitBtn.classList.remove('hover:shadow-2xl', 'hover:scale-105');
+            }
+        }
+
+        // Setup transfer form
+        function setupTransferForm() {
+            const form = document.getElementById('transferForm');
+            if (!form) return;
+            
+            // Add change listeners to all form fields
+            const fields = ['assignmentGroup', 'priority', 'awsRegion', 'awsBucket', 'awsFile', 
+                          'azureRegion', 'azureStorage', 'azureContainer', 'azureFile'];
+            fields.forEach(fieldId => {
+                const field = document.getElementById(fieldId);
+                if (field) {
+                    field.addEventListener('change', validateForm);
+                }
+            });
+            
+            // Environment radio buttons
+            const envRadios = document.querySelectorAll('input[name="environment"]');
+            envRadios.forEach(radio => {
+                radio.addEventListener('change', validateForm);
+            });
+            
+            // Form submit
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                // Collect form data
+                transferData.assignmentGroup = document.getElementById('assignmentGroup').value;
+                transferData.environment = document.querySelector('input[name="environment"]:checked').value;
+                transferData.priority = document.getElementById('priority').value;
+                
+                if (transferData.provider === 'aws') {
+                    transferData.region = document.getElementById('awsRegion').value;
+                    transferData.bucketName = document.getElementById('awsBucket').value;
+                    transferData.fileName = document.getElementById('awsFile').value;
+                } else if (transferData.provider === 'azure') {
+                    transferData.region = document.getElementById('azureRegion').value;
+                    transferData.storageName = document.getElementById('azureStorage').value;
+                    transferData.containerName = document.getElementById('azureContainer').value;
+                    transferData.fileName = document.getElementById('azureFile').value;
+                }
+                
+                console.log('Form submitted with data:', transferData);
+                
+                // Navigate to AWS SSO page (ServiceNow ticket creation)
+                navigateTo('aws-sso');
+            });
+            
+            // Initial validation
+            validateForm();
+        }
+
+        // Toggle profile dropdown
+        function toggleProfileDropdown() {
+            const dropdown = document.getElementById('profileDropdown');
+            if (dropdown) {
+                dropdown.classList.toggle('hidden');
+            }
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('profileDropdown');
+            const button = event.target.closest('button[onclick="toggleProfileDropdown()"]');
+            
+            if (dropdown && !dropdown.contains(event.target) && !button) {
+                dropdown.classList.add('hidden');
+            }
+        });
+
+        // Cloud SSO Page (ServiceNow Tickets + Destination Config)
+        function renderAWSSSO() {
+            const provider = transferData?.provider || 'aws';
+            const providerName = provider === 'aws' ? 'AWS' : 'Azure';
+            const bucketName = transferData?.bucketName || transferData?.storageName || 'my-test-bucket';
+            const fileName = transferData?.fileName || 'file.txt';
+            const region = transferData?.region || 'us-east-1';
+            
+            // Generate ServiceNow ticket numbers
+            const userTicket = `INC${String(Math.floor(Math.random() * 1000000)).padStart(7, '0')}`;
+            const auditTicket = `RITM${String(Math.floor(Math.random() * 1000000)).padStart(7, '0')}`;
+            
+            transferData.userTicket = userTicket;
+            transferData.auditTicket = auditTicket;
+            
+            // Start 60-second notification timer
+            if (!transferData.ssoTimerStarted) {
+                transferData.ssoTimerStarted = true;
+                transferData.ssoSecondsRemaining = 60;
+                
+                setTimeout(() => {
+                    addNotification('success', 'ServiceNow Tickets Created', 
+                        `User Ticket: ${userTicket}\\nAudit Ticket: ${auditTicket}`);
+                    addNotification('progress', 'SSO Authentication Active', 
+                        `Please review tickets and configuration (${transferData.ssoSecondsRemaining}s)`);
+                }, 500);
+                
+                // Update countdown every second
+                const ssoTimerInterval = setInterval(() => {
+                    if (transferData.ssoSecondsRemaining > 0) {
+                        transferData.ssoSecondsRemaining--;
+                        
+                        // Update timer display
+                        const timerElement = document.getElementById('ssoTimer');
+                        if (timerElement) {
+                            timerElement.textContent = transferData.ssoSecondsRemaining;
+                        }
+                        
+                        if (transferData.ssoSecondsRemaining % 10 === 0 && transferData.ssoSecondsRemaining > 0) {
+                            addNotification('info', 'SSO Timer', 
+                                `${transferData.ssoSecondsRemaining} seconds remaining on SSO page`);
+                        }
+                    } else {
+                        clearInterval(ssoTimerInterval);
+                        addNotification('success', 'SSO Review Complete', 
+                            'You may now proceed to file selection');
+                    }
+                }, 1000);
+            }
+            
+            const bgGradient = provider === 'aws' ? 'from-orange-500 to-red-600' : 'from-blue-400 to-cyan-500';
+            const iconGradient = provider === 'aws' ? 'from-orange-500 to-red-600' : 'from-blue-400 to-cyan-500';
+            
+            return `
+                <div class="min-h-screen bg-gradient-to-br ${bgGradient} flex items-center justify-center p-4">
+                    <div class="max-w-2xl w-full bg-white rounded-2xl shadow-2xl p-8 animate-fade-in">
+                        <div class="text-center mb-8">
+                            <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br ${iconGradient} rounded-full mb-4">
+                                ${icons.shield}
+                            </div>
+                            <h1 class="text-3xl font-bold text-gray-900 mb-2">${providerName} SSO Authentication</h1>
+                            <p class="text-gray-600">Creating ServiceNow tickets & initiating transfer...</p>
+                        </div>
+
+                        <div class="text-center py-8">
+                            <div class="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4 animate-bounce">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                            </div>
+                            <h2 class="text-2xl font-bold text-green-600 mb-2">Authentication Successful!</h2>
+                            <p class="text-gray-600 mb-2">ServiceNow tickets created & transfer initiated</p>
+                            <div class="inline-block bg-yellow-100 border-2 border-yellow-300 rounded-lg px-4 py-2 mb-4">
+                                <p class="text-sm font-semibold text-yellow-800">⏱️ SSO Session: <span id="ssoTimer">${transferData.ssoSecondsRemaining || 60}</span> seconds</p>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                                    <div class="flex items-center justify-center mb-2">
+                                        <span class="text-sm font-medium text-blue-800">User Ticket</span>
+                                    </div>
+                                    <p class="text-lg font-mono font-bold text-blue-900">${userTicket}</p>
+                                </div>
+                                
+                                <div class="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
+                                    <div class="flex items-center justify-center mb-2">
+                                        <span class="text-sm font-medium text-purple-800">Audit Ticket</span>
+                                    </div>
+                                    <p class="text-lg font-mono font-bold text-purple-900">${auditTicket}</p>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 mb-6">
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4">Destination Server Configuration</h3>
+                                
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                                            Select Destination Server Type <span class="text-red-500">*</span>
+                                        </label>
+                                        <select id="destinationServer" onchange="handleDestinationChange()" 
+                                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 outline-none">
+                                            <option value="">-- Select Server Type --</option>
+                                            <option value="FTP" selected>FTP Server</option>
+                                            <option value="SFTP">SFTP Server</option>
+                                            <option value="WinSCP">WinSCP</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div id="folderDetailsSection">
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                                            Folder Path <span class="text-red-500">*</span>
+                                        </label>
+                                        <input type="text" id="folderPath" value="/temp/Martin" placeholder="e.g., /temp/Martin" 
+                                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 outline-none">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <button onclick="confirmTransfer()" class="w-full bg-gradient-to-r from-green-600 to-green-700 text-white px-8 py-4 rounded-xl font-semibold hover:from-green-700 hover:to-green-800 transition-all shadow-lg flex items-center justify-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                                    Confirm Configuration & Continue
+                                </button>
+                                <button onclick="navigateTo('s3-bucket')" class="w-full bg-gradient-to-r ${provider === 'aws' ? 'from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700' : 'from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700'} text-white px-8 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                    ${provider === 'aws' ? 'Browse S3 Bucket & Select File' : 'Browse Azure Container & Select File'}
+                                </button>
+                                <button onclick="navigateTo('dashboard')" class="w-full bg-white border-2 border-gray-300 text-gray-700 px-8 py-3 rounded-xl font-medium hover:bg-gray-50 transition-all flex items-center justify-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    Cancel & Return to Dashboard
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // S3 Bucket / Azure Container Page (File Browser)
+        function renderS3Bucket() {
+            const provider = transferData?.provider || 'aws';
+            const providerName = provider === 'aws' ? 'AWS S3' : 'Azure Storage';
+            const containerName = provider === 'aws' 
+                ? (transferData?.bucketName || 'fileferry-demo-bucket')
+                : (transferData?.storageName || transferData?.containerName || 'fileferry-storage');
+            const fileName = transferData?.fileName || 'customer-data-2024.csv';
+            
+            // Initialize selectedS3File if not already set (for pre-selected files from form)
+            if (!transferData.selectedS3File && fileName) {
+                transferData.selectedS3File = fileName;
+            }
+            
+            const selectedFile = transferData?.selectedS3File || fileName;
+            const region = transferData?.region || 'us-east-1';
+            
+            // Get files based on provider and bucket/container
+            let mockFiles = [];
+            if (provider === 'aws') {
+                const s3Files = s3Buckets[containerName] || s3Buckets['fileferry-demo-bucket'];
+                mockFiles = s3Files.map(f => ({...f, highlighted: f.name === selectedFile}));
+            } else if (provider === 'azure') {
+                // Get Azure files from the selected storage account and container
+                const storageAccount = azureStorageAccounts[transferData?.storageName];
+                if (storageAccount && transferData?.containerName) {
+                    const container = storageAccount.containers.find(c => c.name === transferData.containerName);
+                    if (container && container.files) {
+                        mockFiles = container.files.map(f => ({...f, type: 'File', highlighted: f.name === selectedFile}));
+                    }
+                }
+                // Fallback if no files found
+                if (mockFiles.length === 0) {
+                    mockFiles = [{name: fileName, size: '2.3 MB', modified: '2024-12-07', type: 'File', highlighted: true}];
+                }
+            }
+            
+            return `
+                <div class="min-h-screen bg-gray-50">
+                    <nav class="bg-gray-900 text-white shadow-lg">
+                        <div class="max-w-7xl mx-auto px-6 py-4">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center space-x-4">
+                                    <svg class="w-8 h-8 text-orange-500" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+                                    </svg>
+                                    <span class="text-xl font-bold">${providerName} Console</span>
+                                </div>
+                                <button onclick="navigateTo('dashboard')" class="text-sm text-red-400 hover:text-red-300">
+                                    Close & Return
+                                </button>
+                            </div>
+                        </div>
+                    </nav>
+
+                    <div class="max-w-7xl mx-auto px-6 py-8">
+                        <h1 class="text-2xl font-bold text-gray-900 mb-4">${containerName}</h1>
+                        
+                        <div class="bg-white rounded-xl shadow border p-6">
+                            <h2 class="text-lg font-semibold mb-4">${provider === 'aws' ? 'Objects in Bucket' : 'Files in Container'}</h2>
+                            
+                            <table class="w-full">
+                                <thead class="bg-gray-50 border-b">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Name</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Type</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Size</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Modified</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${mockFiles.map(file => `
+                                        <tr class="${file.highlighted ? 'bg-yellow-50 border-l-4 border-yellow-400' : 'hover:bg-gray-50'}">
+                                            <td class="px-6 py-4">
+                                                <div class="flex items-center">
+                                                    <input type="radio" name="s3file" value="${file.name}" 
+                                                        ${file.highlighted ? 'checked' : ''} 
+                                                        onchange="selectS3File('${file.name}')"
+                                                        class="mr-3">
+                                                    <span class="${file.highlighted ? 'font-bold' : ''}">
+                                                        ${file.name}
+                                                        ${file.highlighted ? '<span class="ml-2 text-xs bg-yellow-200 px-2 py-1 rounded">✓ Selected</span>' : ''}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-4 text-sm text-gray-500">${file.type}</td>
+                                            <td class="px-6 py-4 text-sm text-gray-500">${file.size}</td>
+                                            <td class="px-6 py-4 text-sm text-gray-500">${file.modified}</td>
+                                            <td class="px-6 py-4">
+                                                ${file.highlighted 
+                                                    ? '<span class="text-green-600 font-semibold">✓ Selected</span>' 
+                                                    : `<button onclick="selectS3File('${file.name}')" class="text-blue-600 hover:text-blue-800">Select</button>`}
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mt-6 flex justify-between">
+                            <button onclick="navigateTo('aws-sso')" 
+                                class="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+                                ← Back
+                            </button>
+                            <button onclick="initiateTransfer()" 
+                                class="px-8 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg font-semibold hover:from-green-700 hover:to-green-800">
+                                Initiate File Transfer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // FTP Server Page (Transfer Progress)
+        function renderFTPServer() {
+            const serverType = transferData?.destinationType || 'FTP';
+            const fileName = transferData?.selectedS3File || transferData?.fileName || 'file.txt';
+            const folder = transferData?.destinationFolder || '/temp/Martin';
+            const isComplete = transferData?.transferComplete || false;
+            const fileSize = transferData?.fileSize || '2.3 MB';
+            
+            return `
+                <div class="min-h-screen bg-gray-900 text-gray-100">
+                    <div class="bg-gray-800 border-b border-gray-700 px-6 py-4">
+                        <div class="max-w-7xl mx-auto flex items-center justify-between">
+                            <div class="flex items-center space-x-4">
+                                <div class="bg-blue-600 p-2 rounded-lg">
+                                    ${icons.server}
+                                </div>
+                                <div>
+                                    <h1 class="text-xl font-bold">${serverType} Server Console</h1>
+                                    <p class="text-sm text-gray-400">Connected to 192.168.1.100:21</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                                <span class="text-sm text-green-400">Connected</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="max-w-7xl mx-auto px-6 py-8">
+                        <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
+                            <h2 class="text-lg font-semibold mb-4">File Transfer Progress</h2>
+                            
+                            <div class="mb-4">
+                                <div class="flex justify-between mb-2">
+                                    <span class="text-sm" id="transfer-status-text">
+                                        ${isComplete ? 'Transfer Complete!' : 'Initializing transfer...'}
+                                    </span>
+                                    <span class="text-sm font-mono text-blue-400" id="transfer-progress-text">
+                                        ${isComplete ? '100%' : '0%'}
+                                    </span>
+                                </div>
+                                <div class="w-full bg-gray-700 rounded-full h-3">
+                                    <div id="transfer-progress-bar" class="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all" style="width: ${isComplete ? '100%' : '0%'}"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-4 gap-4 mt-6">
+                                <div class="bg-gray-900 rounded-lg p-3">
+                                    <p class="text-xs text-gray-500">Source</p>
+                                    <p class="text-sm font-medium">${transferData.provider === 'aws' ? 'AWS S3' : 'Azure Storage'}</p>
+                                </div>
+                                <div class="bg-gray-900 rounded-lg p-3">
+                                    <p class="text-xs text-gray-500">Destination</p>
+                                    <p class="text-sm font-medium">${serverType}</p>
+                                </div>
+                                <div class="bg-gray-900 rounded-lg p-3">
+                                    <p class="text-xs text-gray-500">File Size</p>
+                                    <p class="text-sm font-medium">${fileSize}</p>
+                                </div>
+                                <div class="bg-gray-900 rounded-lg p-3">
+                                    <p class="text-xs text-gray-500">Protocol</p>
+                                    <p class="text-sm font-medium">${serverType === 'SFTP' ? 'SSH FTP' : serverType}</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+                            <div class="bg-gray-900 px-6 py-3 border-b border-gray-700 flex justify-between">
+                                <div>
+                                    <span class="text-sm text-gray-400">Path:</span>
+                                    <span class="text-sm font-mono text-blue-400">${folder}</span>
+                                </div>
+                                ${isComplete ? '<span class="text-xs bg-green-600 px-3 py-1 rounded-full">✓ Complete</span>' : '<span class="text-xs bg-yellow-600 px-3 py-1 rounded-full animate-pulse">⚡ Transferring...</span>'}
+                            </div>
+                            
+                            <div class="p-6">
+                                <table class="w-full">
+                                    <thead class="text-xs text-gray-500 border-b border-gray-700">
+                                        <tr>
+                                            <th class="pb-3 text-left">Name</th>
+                                            <th class="pb-3 text-left">Type</th>
+                                            <th class="pb-3 text-left">Size</th>
+                                            <th class="pb-3 text-left">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-sm">
+                                        <tr class="${isComplete ? 'bg-green-900 bg-opacity-20' : 'bg-yellow-900 bg-opacity-20'} border-b border-gray-700">
+                                            <td class="py-3 flex items-center space-x-2">
+                                                ${isComplete ? '<input type="checkbox" id="fileCheckbox" class="mr-2 w-4 h-4 accent-green-600">' : ''}
+                                                ${icons.file}
+                                                <span class="${isComplete ? 'text-green-300' : 'text-yellow-300'} font-medium">${fileName}</span>
+                                            </td>
+                                            <td class="py-3">${fileName.endsWith('.csv') ? 'CSV File' : fileName.endsWith('.json') ? 'JSON File' : fileName.endsWith('.pdf') ? 'PDF File' : 'File'}</td>
+                                            <td class="py-3">${fileSize}</td>
+                                            <td class="py-3">
+                                                ${isComplete ? '<span class="text-xs bg-green-600 px-2 py-1 rounded">✓ Complete</span>' : '<span class="text-xs bg-yellow-600 px-2 py-1 rounded animate-pulse">⚡ Transferring</span>'}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6 flex justify-between items-center">
+                            ${isComplete ? 
+                                `<button onclick="downloadFile()" class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl font-medium hover:from-blue-700 hover:to-blue-800 flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                    Download File
+                                </button>
+                                <button onclick="completeTransferProcess()" class="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-3 rounded-xl font-medium hover:from-green-700 hover:to-emerald-700">
+                                    ✓ Complete & Return to Dashboard
+                                </button>` : 
+                                `<div></div>
+                                <button disabled class="bg-gray-700 text-gray-500 px-8 py-3 rounded-xl font-medium cursor-not-allowed">
+                                    Please wait...
+                                </button>`
+                            }
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Helper Functions
+        function handleDestinationChange() {
+            const serverType = document.getElementById('destinationServer').value;
+            const folderSection = document.getElementById('folderDetailsSection');
+            
+            if (serverType) {
+                folderSection.style.display = 'block';
+                transferData.destinationType = serverType;
+            } else {
+                folderSection.style.display = 'none';
+            }
+        }
+
+        function confirmTransfer() {
+            const serverType = document.getElementById('destinationServer')?.value;
+            const folderPath = document.getElementById('folderPath')?.value;
+            
+            if (!serverType) {
+                addNotification('error', 'Validation Error', 'Please select a destination server type');
+                return;
+            }
+            
+            if (!folderPath || folderPath.trim() === '') {
+                addNotification('error', 'Validation Error', 'Please enter a folder path');
+                return;
+            }
+            
+            transferData.destinationType = serverType;
+            transferData.destinationFolder = folderPath;
+            
+            addNotification('success', 'Configuration Saved', 
+                `Destination: ${serverType} - ${folderPath}`);
+            
+            // Navigate to cloud storage browser
+            navigateTo('s3-bucket');
+        }
+
+        function selectS3File(fileName) {
+            transferData.selectedS3File = fileName;
+            
+            // Find file size based on provider
+            if (transferData.provider === 'aws') {
+                const bucket = s3Buckets[transferData.bucketName];
+                if (bucket) {
+                    const file = bucket.find(f => f.name === fileName);
+                    if (file) transferData.fileSize = file.size;
+                }
+            } else if (transferData.provider === 'azure') {
+                const storageAccount = azureStorageAccounts[transferData.storageName];
+                if (storageAccount && transferData.containerName) {
+                    const container = storageAccount.containers.find(c => c.name === transferData.containerName);
+                    if (container && container.files) {
+                        const file = container.files.find(f => f.name === fileName);
+                        if (file) transferData.fileSize = file.size;
+                    }
+                }
+            }
+            
+            render();
+        }
+
+        function initiateTransfer() {
+            if (!transferData.selectedS3File) {
+                alert('Please select a file first');
+                return;
+            }
+            
+            // Track transfer start
+            sessionStats.totalTransfers++;
+            if (transferData.provider === 'aws') {
+                sessionStats.awsTransfers++;
+            } else {
+                sessionStats.azureTransfers++;
+            }
+            
+            transferData.transferComplete = false;
+            navigateTo('ftp-server');
+            
+            // Simulate transfer
+            setTimeout(() => {
+                const progressBar = document.getElementById('transfer-progress-bar');
+                const progressText = document.getElementById('transfer-progress-text');
+                const statusText = document.getElementById('transfer-status-text');
+                
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 5;
+                    if (progressBar) progressBar.style.width = progress + '%';
+                    if (progressText) progressText.textContent = progress + '%';
+                    if (statusText) statusText.textContent = `Transferring... ${progress}%`;
+                    
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        transferData.transferComplete = true;
+                        sessionStats.successfulTransfers++; // Track successful completion
+                        render();
+                        addNotification('success', 'Transfer Complete', 
+                            `${transferData.selectedS3File} successfully transferred`);
+                    }
+                }, 200);
+            }, 500);
+        }
+
+        function downloadFile() {
+            const checkbox = document.getElementById('fileCheckbox');
+            const fileName = transferData?.selectedS3File || transferData?.fileName || 'file.txt';
+            
+            if (checkbox && !checkbox.checked) {
+                addNotification('warning', 'No File Selected', 'Please select a file to download');
+                return;
+            }
+            
+            addNotification('success', 'Download Started', `Downloading ${fileName}...`);
+            
+            // Simulate download by creating a blob and triggering download
+            setTimeout(() => {
+                const content = `This is a demo file: ${fileName}\n\nTransferred from: ${transferData.provider === 'aws' ? 'AWS S3' : 'Azure Storage'}\nDestination: ${transferData.destinationType} Server\nFolder: ${transferData.destinationFolder}\n\nTransfer completed on: ${new Date().toLocaleString()}`;
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                addNotification('success', 'Download Complete', `${fileName} downloaded successfully`);
+                
+                // Redirect to Thank You page after download
+                setTimeout(() => {
+                    navigateTo('thank-you');
+                }, 1000);
+            }, 500);
+        }
+
+        function completeTransferProcess() {
+            addNotification('success', 'Process Complete', 'File transfer completed successfully');
+            
+            // Start 10-second countdown for auto-logout
+            let countdown = 10;
+            addNotification('info', 'Auto-Logout', `Logging out in ${countdown} seconds...`);
+            
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    addNotification('info', 'Auto-Logout', `Logging out in ${countdown} seconds...`);
+                } else {
+                    clearInterval(countdownInterval);
+                    // Perform logout
+                    logout();
+                }
+            }, 1000);
+        }
+        
+        function logout() {
+            // Clear session data
+            transferData = {};
+            notifications = [];
+            notificationIdCounter = 0;
+            
+            // Show logout notification
+            addNotification('success', 'Logged Out', 'SSO session disconnected successfully');
+            
+            // Return to login page after brief delay
+            setTimeout(() => {
+                navigateTo('login');
+            }, 1500);
+        }
+
+        // Notification functions
+        function addNotification(type, title, message, estimatedTime = null) {
+            const notification = {
+                id: ++notificationIdCounter,
+                type: type,
+                title: title,
+                message: message,
+                estimatedTime: estimatedTime,
+                timestamp: new Date()
+            };
+            
+            notifications.unshift(notification);
+            updateNotificationUI();
+            
+            // Auto-show notification panel
+            const panel = document.getElementById('notificationPanel');
+            if (panel) {
+                panel.style.display = 'block';
+                
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    panel.style.display = 'none';
+                }, 5000);
+            }
+        }
+        
+        function updateNotificationUI() {
+            const badge = document.getElementById('notificationBadge');
+            const list = document.getElementById('notificationList');
+            
+            if (!badge || !list) return;
+            
+            // Update badge
+            if (notifications.length > 0) {
+                badge.style.display = 'block';
+                badge.textContent = notifications.length;
+            } else {
+                badge.style.display = 'none';
+            }
+            
+            // Update list
+            if (notifications.length === 0) {
+                list.innerHTML = '<div style="padding: 40px 20px; text-align: center; color: #9ca3af;"><p style="margin: 0;">No notifications</p></div>';
+            } else {
+                list.innerHTML = notifications.map(notif => {
+                    const icons = {
+                        success: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>',
+                        error: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
+                        info: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
+                        progress: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>'
+                    };
+                    
+                    const colors = {
+                        success: '#d1fae5',
+                        error: '#fee2e2',
+                        info: '#dbeafe',
+                        progress: '#fef3c7'
+                    };
+                    
+                    return `
+                        <div style="background: ${colors[notif.type]}; border-radius: 12px; padding: 12px; margin-bottom: 8px; border-left: 4px solid ${notif.type === 'success' ? '#10b981' : notif.type === 'error' ? '#ef4444' : notif.type === 'info' ? '#3b82f6' : '#f59e0b'};">
+                            <div style="display: flex; gap: 12px;">
+                                <div style="flex-shrink: 0; padding-top: 2px;">${icons[notif.type]}</div>
+                                <div style="flex-grow: 1;">
+                                    <div style="font-weight: 600; font-size: 14px; color: #1f2937; margin-bottom: 4px;">${notif.title}</div>
+                                    <div style="font-size: 13px; color: #4b5563; margin-bottom: 4px;">${notif.message}</div>
+                                    ${notif.estimatedTime ? `<div style="font-size: 12px; color: #6b7280; font-style: italic;">⏱️ Est. Time: ${notif.estimatedTime}</div>` : ''}
+                                    <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">${formatTimestamp(notif.timestamp)}</div>
+                                </div>
+                                <button onclick="removeNotification(${notif.id})" style="background: transparent; border: none; color: #9ca3af; cursor: pointer; font-size: 18px; line-height: 1; padding: 0; width: 20px; height: 20px;">×</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+        
+        function toggleNotifications() {
+            const panel = document.getElementById('notificationPanel');
+            if (panel) {
+                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+        
+        function removeNotification(id) {
+            notifications = notifications.filter(n => n.id !== id);
+            updateNotificationUI();
+        }
+        
+        function clearAllNotifications() {
+            notifications = [];
+            updateNotificationUI();
+        }
+        
+        function formatTimestamp(date) {
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000);
+            
+            if (diff < 60) return 'Just now';
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return date.toLocaleDateString();
+        }
+
+        // Logout function
+        function logout() {
+            // Clear any stored data
+            transferData = {};
+            currentPage = 'login';
+            
+            // Add logout notification
+            addNotification('info', 'Logged Out', 'You have been successfully logged out');
+            
+            // Navigate to login
+            navigateTo('login');
+        }
+
+        // Setup login form
+        function setupLoginForm() {
+            const form = document.querySelector('form');
+            if (form) {
+                form.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    navigateTo('dashboard');
+                });
+            }
+        }
+
+        // Main render function
+        function render() {
+            const app = document.getElementById('app');
+            
+            switch(currentPage) {
+                case 'login':
+                    app.innerHTML = renderLogin();
+                    setupLoginForm();
+                    break;
+                case 'dashboard':
+                    app.innerHTML = renderDashboard();
+                    break;
+                case 'file-transfer':
+                    app.innerHTML = renderFileTransfer();
+                    setupTransferForm();
+                    break;
+                case 'aws-sso':
+                    app.innerHTML = renderAWSSSO();
+                    break;
+                case 's3-bucket':
+                    app.innerHTML = renderS3Bucket();
+                    break;
+                case 'ftp-server':
+                    app.innerHTML = renderFTPServer();
+                    break;
+                case 'thank-you':
+                    app.innerHTML = renderThankYou();
+                    break;
+                case 'success':
+                    app.innerHTML = renderSuccess();
+                    break;
+                default:
+                    app.innerHTML = renderLogin();
+            }
+        }
+
+        // Initialize app
+        render();
+        
+        // Close notification panel when clicking outside
+        document.addEventListener('click', function(event) {
+            const panel = document.getElementById('notificationPanel');
+            const button = document.getElementById('notificationButton');
+            if (panel && button && !panel.contains(event.target) && !button.contains(event.target)) {
+                panel.style.display = 'none';
+            }
+        });
+    </script>
+    
+    <!-- Notification Center - Bottom Left -->
+    <div id="notificationCenter" style="position: fixed; bottom: 100px; left: 20px; z-index: 1000;">
+        <button id="notificationButton" onclick="toggleNotifications()" style="position: relative; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); width: 56px; height: 56px; border-radius: 50%; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); transition: all 0.3s ease; display: flex; align-items: center; justify-content: center;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <span id="notificationBadge" style="display: none; position: absolute; top: 8px; right: 8px; background: #ef4444; color: white; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center;">0</span>
+        </button>
+        
+        <div id="notificationPanel" style="display: none; position: absolute; bottom: 70px; left: 0; width: 380px; max-height: 500px; background: white; border-radius: 16px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); overflow: hidden;">
+            <div style="padding: 16px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; font-size: 18px; font-weight: 600;">Transfer Notifications</h3>
+                    <button onclick="clearAllNotifications()" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">Clear All</button>
+                </div>
+            </div>
+            
+            <div id="notificationList" style="padding: 16px; max-height: 400px; overflow-y: auto;">
+                <div style="padding: 40px 20px; text-align: center; color: #9ca3af;">
+                    <p style="margin: 0;">No notifications</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- HCL Technologies Branding - Bottom Right -->
+    <div style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
+        <div style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); border: 1px solid rgba(255, 255, 255, 0.3);">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="40" height="40" rx="8" fill="#0066CC"/>
+                    <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="16" font-weight="bold">HCL</text>
+                </svg>
+                <div>
+                    <div style="font-size: 14px; font-weight: 600; color: #1a202c; line-height: 1.2;">HCL Technologies</div>
+                    <div style="font-size: 11px; color: #718096; line-height: 1.2;">Powered by Innovation</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
